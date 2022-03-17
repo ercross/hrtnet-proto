@@ -2,6 +2,13 @@ module github.com/Hrtnet/social-activities
 
 go 1.17
 
+// Below are build constraints syntax to pass configs to Heroku.
+// Check https://github.com/heroku/heroku-buildpack-go#go-module-specifics for more info
+// +heroku goVersion go1.17
+
+// This specifies the directory where main package lives
+// +heroku install ./cmd/...
+
 require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20191129215211-8e5a1ed0cff0 // indirect
 	github.com/go-chi/chi/v5 v5.0.7 // indirect
