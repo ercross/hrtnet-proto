@@ -28,12 +28,6 @@ type app struct {
 func main() {
 
 	cfg := initConfig()
-	logger.Logger = logger.NewLogger(cfg.environment == model.Production)
-	if err := godotenv.Load(); err != nil {
-		logger.Logger.LogFatal("error loading env file", "initializing app config", err)
-	}
-
-	cfg.dsn = os.Getenv("DSN")
 
 	//mongo, err := db.Connect(cfg.dsn)
 	//if err != nil {
@@ -65,9 +59,17 @@ func (app *app) serve() error {
 func initConfig() config {
 	var config config
 
-	flag.IntVar(&config.port, "port", 4041, "port the server listens on")
+	flag.IntVar(&config.port, "port", 4042, "port the server listens on")
 	flag.Var(&config.environment, "environment", "application environment, enum: development, production")
 	flag.StringVar(&config.apiUrl, "apiUrl", "localhost", "api endpoint")
 	flag.Parse()
+
+	if config.environment == model.Development {
+		if err := godotenv.Load(); err != nil {
+			logger.Logger.LogFatal("error loading env file", "initializing app config", err)
+		}
+
+		config.dsn = os.Getenv("DSN")
+	}
 	return config
 }

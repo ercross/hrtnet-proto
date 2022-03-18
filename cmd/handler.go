@@ -1,12 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/skip2/go-qrcode"
-	"log"
 	"net/http"
 )
 
@@ -275,15 +275,24 @@ func (app *app) dispatchNotifications(w http.ResponseWriter, r *http.Request) {
 		logger.Logger.LogError("error upgrading connection to websocket", "dispatch notification", err)
 		return
 	}
-	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if err := conn.WriteMessage(messageType, p); err != nil {
-			log.Println(err)
-			return
-		}
+
+	err = conn.WriteJSON(struct {
+		Message string `json:"message"`
+	}{
+		Message: "Don't do this",
+	})
+	if err != nil {
+		fmt.Println("error encountered:: ", err)
 	}
+	//for {
+	//	messageType, p, err := conn.ReadMessage()
+	//	if err != nil {
+	//		log.Println(err)
+	//		return
+	//	}
+	//	if err := conn.WriteMessage(messageType, p); err != nil {
+	//		log.Println(err)
+	//		return
+	//	}
+	//}
 }
