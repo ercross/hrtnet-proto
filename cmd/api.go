@@ -28,7 +28,7 @@ type app struct {
 func main() {
 
 	cfg := initConfig()
-
+	logger.Logger = logger.NewLogger(cfg.environment == model.Production)
 	//mongo, err := db.Connect(cfg.dsn)
 	//if err != nil {
 	//	logger.Logger.LogFatal("error connecting to database", "", err)
@@ -64,6 +64,7 @@ func initConfig() config {
 	flag.StringVar(&config.apiUrl, "apiUrl", "localhost", "api endpoint")
 	flag.Parse()
 
+	fmt.Println("isProduction", config.environment == model.Production)
 	if config.environment == model.Development {
 		if err := godotenv.Load(); err != nil {
 			logger.Logger.LogFatal("error loading env file", "initializing app config", err)
