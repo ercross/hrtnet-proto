@@ -13,6 +13,7 @@ type Cache struct {
 	taskReports map[string]model.TasksReport
 	tasks       []string
 
+	// maps user id to wallet address
 	userIds map[string]string
 
 	drugs map[model.Drug]model.ValidationOption
@@ -22,6 +23,8 @@ type Cache struct {
 
 	// maps rfidText to drug
 	rfidText map[string]*model.Drug
+
+	incidenceReports *[]model.IncidenceReport
 }
 
 var sampleDrug1 = model.Drug{
@@ -50,7 +53,9 @@ func InitCache() *Cache {
 		"Using your User ID as your referral ID, refer 5 of your friends to join our telegram community",
 	}
 	c.taskReports = make(map[string]model.TasksReport)
-
+	c.rfidText = make(map[string]*model.Drug)
+	c.shortCodes = make(map[string]*model.Drug)
+	c.incidenceReports = &[]model.IncidenceReport{}
 	c.userIds = make(map[string]string)
 	return &c
 }
@@ -77,10 +82,15 @@ func (c *Cache) FetchUserID() (string, error) {
 		onetimecode.WithMax(6),
 		onetimecode.WithoutDashes(),
 	).Code()
+
+	// check that user id isn't already existing
 	_, ok := c.userIds[userId]
 	if ok {
 		c.FetchUserID()
 	} else {
+
+		// save new user id into wallet
+		c.userIds[userId] = "0xc0ffee254729296a45a3885639AC7E10F9d54979"
 		return userId, nil
 	}
 	return c.FetchUserID()
@@ -135,6 +145,21 @@ func (c *Cache) ValidateRFIDText(value string) (*model.Drug, error) {
 		return nil, errors.New("invalid tracking code")
 	}
 	return drug, nil
+}
+
+func (c *Cache) SubmitIncidenceReport(report *model.IncidenceReport) error {
+	*c.incidenceReports = append(*c.incidenceReports, *report)
+	return nil
+}
+
+var ErrUserNotFound = errors.New("user not found")
+
+func (c *Cache) FetchWalletAddress(forUserId string) (string, error) {
+	addr, ok := c.userIds[forUserId]
+	if !ok {
+		return "", ErrUserNotFound
+	}
+	return addr, nil
 }
 
 func (c *Cache) FetchDrugByBatchNumber(batchNumber, manufacturer string) (*model.Drug, error) {

@@ -25,10 +25,18 @@ type app struct {
 	repo   Repository
 }
 
+// createDirs creates necessary file server directories with
+// the appropriate file permissions
+func createDirs() {
+	os.MkdirAll("./res/images/incidence-reports/receipts", 0700)
+	os.MkdirAll("./res/images/incidence-reports/drugs", 0700)
+}
+
 func main() {
 
 	cfg := initConfig()
 	logger.Logger = logger.NewLogger(cfg.environment == model.Production)
+	createDirs()
 	//mongo, err := db.Connect(cfg.dsn)
 	//if err != nil {
 	//	logger.Logger.LogFatal("error connecting to database", "", err)

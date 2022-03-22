@@ -32,6 +32,12 @@ type Repository interface {
 	// Note that batch numbers are often used for internal tracking
 	// by drug manufacturers
 	FetchDrugByBatchNumber(batchNumber, manufacturer string) (*model.Drug, error)
+
+	// FetchWalletAddress fetches the wallet address forUserId.
+	// Returns db.ErrUserNotFound if user_id is not found in repo
+	FetchWalletAddress(forUserId string) (string, error)
+
+	SubmitIncidenceReport(report *model.IncidenceReport) error
 }
 
 type Validator interface {

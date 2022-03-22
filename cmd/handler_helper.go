@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"github.com/Hrtnet/social-activities/internal/model"
 	"github.com/pkg/errors"
+
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // extractIDFromQueryParam retrieves "id" URL parameter from the current request.
@@ -79,40 +81,6 @@ func (app *app) sendAPIResponse(args *responseWriterArgs, data interface{}) {
 		app.sendServerErrorResponse(args.writer, &http.Request{}, err)
 		return
 	}
-}
-
-// writeAPIResponse writes apiResponse to w.
-// Typically use this if returning a list of values
-func (app *app) writeListAPIResponse(args responseWriterArgs, data []interface{}) error {
-
-	response := struct {
-		Status  bool              `json:"status"`
-		Message string            `json:"message"`
-		Errors  map[string]string `json:"errors,omitempty"`
-		Data    []interface{}     `json:"data,omitempty"`
-	}{
-		Status:  args.status,
-		Message: args.message,
-		Data:    data,
-	}
-
-	// Encode the data to JSON, returning the error if there was one.
-	apiResponse, err := json.MarshalIndent(response, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	// add header to response
-	for key, value := range args.header {
-		args.writer.Header()[key] = value
-	}
-	args.writer.WriteHeader(args.statusCode)
-	args.header.Add("Content-Type", "application/json")
-	_, err = args.writer.Write(apiResponse)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // readJSON reads request body r and decodes the result into dst.
@@ -192,4 +160,32 @@ func formatReadError(err error) error {
 // If one or more fields are missing, it reports an error
 func validateTaskReport(report *model.TasksReport) (errs map[string]string) {
 	return nil
+}
+
+// extractIncidenceReport extracts incidence report data from the request.
+// Request content-type must be multipart/form-data.
+// Any error returned is a client error
+func extractIncidenceReport(r *http.Request) (*model.IncidenceReport, map[string]string) {
+	var report model.IncidenceReport
+	var errors map[string]string
+	// todo use package go-playground/mold
+	report.UserID = r.PostFormValue("user_id")
+	report.Submitted = time.Now()
+	report.Description = r.PostFormValue("description")
+	report.PharmacyLocation = r.PostFormValue("pharmacy_location")
+	report.PharmacyName = r.PostFormValue("pharmacy_name")
+
+	// todo validate with go-playground/validator
+	// todo check that the expected file is not absent
+
+	// save receipt
+	_, _, err := r.FormFile("receipt")
+	if err != nil {
+
+		errors["parse_error"] = err.Error()
+		errors["receipt"] = "unrecognized file format"
+		return nil, errors
+	}
+	// todo complete implementation: save receipt, unzip drug images and save same
+	return &report, errors
 }

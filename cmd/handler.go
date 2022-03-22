@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/Hrtnet/social-activities/internal/db"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/skip2/go-qrcode"
 	"net/http"
+	"time"
 )
 
 // serveAllTaskReports serves activities statistics
@@ -261,6 +263,76 @@ func (app *app) checkStatus(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "HeartNet prototype is up and running",
+	}, nil)
+}
+
+// serveStarterPack serves returning user with their existing wallet address
+// METHOD: GET
+// Content-Type: application/json
+// Query param: user_id string *required
+func (app *app) serveWalletAddress(w http.ResponseWriter, r *http.Request) {
+	userId := r.URL.Query().Get("user_id")
+	if userId == "" {
+		app.sendBadRequestResponse(w, r, errors.New("missing user_id"))
+		return
+	}
+
+	addr, err := app.repo.FetchWalletAddress(userId)
+	if err == db.ErrUserNotFound {
+		app.sendAPIResponse(&responseWriterArgs{
+			writer:     w,
+			statusCode: 404,
+			status:     false,
+			message:    "user id not found",
+		}, nil)
+		return
+	}
+	if err != nil {
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    fmt.Sprintf("%s wallet address", userId),
+	}, map[string]string{"address": addr})
+}
+
+func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
+
+	// Max memory::32 MB
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	//report, errs := extractIncidenceReport(r)
+	//if len (errs) != 0 {
+	//	app.sendFailedValidationResponse(w, r, errs)
+	//	return
+	//}
+
+	if err := app.repo.SubmitIncidenceReport(&model.IncidenceReport{
+		ID:                "Temp",
+		UserID:            "QWERTY",
+		PharmacyName:      "Temp",
+		Description:       "Auto generated description",
+		PharmacyLocation:  "Auto generated Location",
+		EvidenceImagesUrl: nil,
+		ReceiptImageUrl:   "",
+		Submitted:         time.Now(),
+	}); err != nil {
+		app.sendServerErrorResponse(w, r, errors.Wrap(err, "error submitting incidence report"))
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message: "Your report has been submitted successfully. " +
+			"Our investigation partners will look into your report swiftly",
 	}, nil)
 }
 
