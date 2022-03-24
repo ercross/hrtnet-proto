@@ -119,7 +119,8 @@ func (app *app) submitTaskReport(w http.ResponseWriter, r *http.Request) {
 // data string *required (the text resulting from QR code scan)
 func (app *app) validateQrCode(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Data string `json:"data"`
+		Data   string `json:"data"`
+		UserID string `json:"user_id"`
 	}
 	err := app.readJSON(w, r, &in)
 	if err != nil {
@@ -146,7 +147,8 @@ func (app *app) validateQrCode(w http.ResponseWriter, r *http.Request) {
 // 		data string *required (the short code)
 func (app *app) validateShortCode(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Data string `json:"data"`
+		Data   string `json:"data"`
+		UserID string `json:"user_id"`
 	}
 	err := app.readJSON(w, r, &in)
 	if err != nil {
@@ -165,7 +167,8 @@ func (app *app) validateShortCode(w http.ResponseWriter, r *http.Request) {
 // 		data string *required (the string read from the RFID tag)
 func (app *app) validateRFIDText(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Data string `json:"data"`
+		Data   string `json:"data"`
+		UserID string `json:"user_id"`
 	}
 	err := app.readJSON(w, r, &in)
 	if err != nil {

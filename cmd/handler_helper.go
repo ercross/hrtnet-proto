@@ -225,6 +225,7 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg config) (*model.Inci
 func (app *app) processValidation(w http.ResponseWriter, r *http.Request, drug *model.Drug, err error) {
 	if err == db.ErrDrugNotFound {
 		app.sendDrugNotFoundResponse(w, r)
+		return
 	}
 
 	if err != nil {
