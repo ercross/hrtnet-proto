@@ -27,7 +27,7 @@ func (app *app) sendErrorResponse(w http.ResponseWriter, r *http.Request, status
 		statusCode: status,
 		message:    message,
 		errors:     errors,
-	}, nil)
+	}, r, nil)
 }
 
 // The serverErrorResponse() method will be used when the app encounters an

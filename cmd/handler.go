@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/skip2/go-qrcode"
 	"net/http"
-	"time"
 )
 
 // serveAllTaskReports serves activities statistics
@@ -27,7 +26,7 @@ func (app *app) serveAllTaskReports(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "All participants' reports",
-	}, reports)
+	}, r, reports)
 	return
 }
 
@@ -49,7 +48,7 @@ func (app *app) serveTaskReport(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "Welcome to HeartNet",
-	}, report)
+	}, r, report)
 	return
 }
 
@@ -69,7 +68,7 @@ func (app *app) serveTasks(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "Welcome to HeartNet",
-	}, tasks)
+	}, r, tasks)
 	return
 }
 
@@ -108,7 +107,7 @@ func (app *app) submitTaskReport(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "Your participation has been recorded successfully",
-	}, nil)
+	}, r, nil)
 	return
 }
 
@@ -137,19 +136,7 @@ func (app *app) validateQrCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drug, err := app.repo.ValidateQrText(in.Data)
-	if err != nil {
-		errs := make(map[string]string, 1)
-		errs["error"] = err.Error()
-		app.sendFailedValidationResponse(w, r, errs)
-		return
-	}
-
-	app.sendAPIResponse(&responseWriterArgs{
-		writer:     w,
-		statusCode: 200,
-		status:     true,
-		message:    "Valid Drug",
-	}, drug)
+	app.processValidation(w, r, drug, err)
 }
 
 // validateShortCode
@@ -168,19 +155,7 @@ func (app *app) validateShortCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drug, err := app.repo.ValidateShortCode(in.Data)
-	if err != nil {
-		errs := make(map[string]string, 1)
-		errs["error"] = err.Error()
-		app.sendFailedValidationResponse(w, r, errs)
-		return
-	}
-
-	app.sendAPIResponse(&responseWriterArgs{
-		writer:     w,
-		statusCode: 200,
-		status:     true,
-		message:    "Valid Drug",
-	}, drug)
+	app.processValidation(w, r, drug, err)
 }
 
 // validateShortCode
@@ -199,19 +174,7 @@ func (app *app) validateRFIDText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drug, err := app.repo.ValidateShortCode(in.Data)
-	if err != nil {
-		errs := make(map[string]string, 1)
-		errs["error"] = err.Error()
-		app.sendFailedValidationResponse(w, r, errs)
-		return
-	}
-
-	app.sendAPIResponse(&responseWriterArgs{
-		writer:     w,
-		statusCode: 200,
-		status:     true,
-		message:    "Valid Drug",
-	}, drug)
+	app.processValidation(w, r, drug, err)
 }
 
 // serveQrCode serves a single QrCode instance to client
@@ -251,7 +214,7 @@ func (app *app) serveStarterPack(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "Welcome to HeartNet",
-	}, map[string]interface{}{
+	}, r, map[string]interface{}{
 		"user_id": userId,
 	})
 	return
@@ -263,7 +226,7 @@ func (app *app) checkStatus(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    "HeartNet prototype is up and running",
-	}, nil)
+	}, r, nil)
 }
 
 // serveStarterPack serves returning user with their existing wallet address
@@ -284,7 +247,7 @@ func (app *app) serveWalletAddress(w http.ResponseWriter, r *http.Request) {
 			statusCode: 404,
 			status:     false,
 			message:    "user id not found",
-		}, nil)
+		}, r, nil)
 		return
 	}
 	if err != nil {
@@ -296,9 +259,21 @@ func (app *app) serveWalletAddress(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    fmt.Sprintf("%s wallet address", userId),
-	}, map[string]string{"address": addr})
+	}, r, map[string]string{"address": addr})
 }
 
+var errFileTooLarge = errors.New("file too large")
+
+// submitIncidenceReport
+// METHOD: POST
+// Content-type: multipart/form-data
+// Request Body:
+//		user_id string *required
+//		pharmacy_name string *required
+//		description string *required
+//		pharmacy_location string *required
+// 		evidence_images multipartfile (Content-Type: application/png, Content-Encoding: gzip) *required
+//		receipt multipartfile (Content-Type file/image)
 func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 
 	// Max memory::32 MB
@@ -307,22 +282,17 @@ func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//report, errs := extractIncidenceReport(r)
-	//if len (errs) != 0 {
-	//	app.sendFailedValidationResponse(w, r, errs)
-	//	return
-	//}
+	report, errorType, errs := app.extractIncidenceReport(r, app.config)
+	if len(errs) != 0 {
+		if errorType == errInternal {
+			app.sendServerErrorResponse(w, r, errors.New(errs["error"]))
+			return
+		}
+		app.sendFailedValidationResponse(w, r, errs)
+		return
+	}
 
-	if err := app.repo.SubmitIncidenceReport(&model.IncidenceReport{
-		ID:                "Temp",
-		UserID:            "QWERTY",
-		PharmacyName:      "Temp",
-		Description:       "Auto generated description",
-		PharmacyLocation:  "Auto generated Location",
-		EvidenceImagesUrl: nil,
-		ReceiptImageUrl:   "",
-		Submitted:         time.Now(),
-	}); err != nil {
+	if err := app.repo.SubmitIncidenceReport(report); err != nil {
 		app.sendServerErrorResponse(w, r, errors.Wrap(err, "error submitting incidence report"))
 		return
 	}
@@ -333,7 +303,7 @@ func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 		status:     true,
 		message: "Your report has been submitted successfully. " +
 			"Our investigation partners will look into your report swiftly",
-	}, nil)
+	}, r, nil)
 }
 
 var wsUpgrader = websocket.Upgrader{

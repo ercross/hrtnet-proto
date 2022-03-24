@@ -14,10 +14,12 @@ import (
 )
 
 type config struct {
-	port        int
-	environment model.Environment
-	apiUrl      string
-	dsn         string
+	port                            int
+	environment                     model.Environment
+	incidenceReportDrugImagePath    string
+	incidenceReportReceiptImagePath string
+	apiUrl                          string
+	dsn                             string
 }
 
 type app struct {
@@ -27,9 +29,10 @@ type app struct {
 
 // createDirs creates necessary file server directories with
 // the appropriate file permissions
-func createDirs() {
-	os.MkdirAll("./res/images/incidence-reports/receipts", 0700)
-	os.MkdirAll("./res/images/incidence-reports/drugs", 0700)
+func createDirs(dirs ...string) {
+	for _, dir := range dirs {
+		os.MkdirAll(dir, 0700)
+	}
 }
 
 func main() {
@@ -80,5 +83,7 @@ func initConfig() config {
 
 		config.dsn = os.Getenv("DSN")
 	}
+	config.incidenceReportDrugImagePath = "./res/images/incidence-reports/drugs"
+	config.incidenceReportReceiptImagePath = "./res/images/incidence-reports/receipts"
 	return config
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/go-chi/httplog"
 	"net/http"
 	"time"
 )
@@ -19,16 +18,11 @@ func (app *app) routes() http.Handler {
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}
 
-	requestLogger := httplog.NewLogger("HRT", httplog.Options{
-		LogLevel: "info",
-		JSON:     true,
-		Concise:  true,
-	})
-
 	mux := chi.NewRouter()
+	mux.Use(attachRequestTime)
 	mux.Use(middleware.RequestID)
-	mux.Use(middleware.Recoverer)
-	mux.Use(httplog.RequestLogger(requestLogger))
+	mux.Use(middleware.RealIP)
+	mux.Use(app.recoverer)
 	mux.Use(middleware.AllowContentType("application/json", "application/gzip", "multipart/form-data"))
 	mux.Use(middleware.SetHeader("Content-Type", "application/json"))
 	mux.Use(middleware.Timeout(30 * time.Second))

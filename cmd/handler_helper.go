@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Hrtnet/social-activities/internal/db"
+	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
 	"github.com/pkg/errors"
-
 	"io"
 	"net/http"
 	"strconv"
@@ -43,7 +44,7 @@ type responseWriterArgs struct {
 }
 
 // sendAPIResponse writes response to responseWriterArgs.writer.
-func (app *app) sendAPIResponse(args *responseWriterArgs, data interface{}) {
+func (app *app) sendAPIResponse(args *responseWriterArgs, request *http.Request, data interface{}) {
 
 	response := struct {
 		Status  bool              `json:"status"`
@@ -81,6 +82,7 @@ func (app *app) sendAPIResponse(args *responseWriterArgs, data interface{}) {
 		app.sendServerErrorResponse(args.writer, &http.Request{}, err)
 		return
 	}
+	logger.Logger.LogServe(args.statusCode, request)
 }
 
 // readJSON reads request body r and decodes the result into dst.
@@ -165,27 +167,113 @@ func validateTaskReport(report *model.TasksReport) (errs map[string]string) {
 // extractIncidenceReport extracts incidence report data from the request.
 // Request content-type must be multipart/form-data.
 // Any error returned is a client error
-func extractIncidenceReport(r *http.Request) (*model.IncidenceReport, map[string]string) {
+func (app *app) extractIncidenceReport(r *http.Request, cfg config) (*model.IncidenceReport, errorType, map[string]string) {
 	var report model.IncidenceReport
-	var errors map[string]string
-	// todo use package go-playground/mold
+	errors := make(map[string]string)
+
+	// check that user is valid
 	report.UserID = r.PostFormValue("user_id")
+	err := app.repo.IsValidUser(report.UserID)
+	if err != nil {
+		errors["error"] = err.Error()
+		return nil, errBadRequest, errors
+	}
+
+	// extract other form values
+	// todo use package go-playground/mold
 	report.Submitted = time.Now()
 	report.Description = r.PostFormValue("description")
 	report.PharmacyLocation = r.PostFormValue("pharmacy_location")
 	report.PharmacyName = r.PostFormValue("pharmacy_name")
 
 	// todo validate with go-playground/validator
-	// todo check that the expected file is not absent
+	// todo check that the expected files are not absent
 
 	// save receipt
-	_, _, err := r.FormFile("receipt")
+	file, header, err := r.FormFile("receipt")
 	if err != nil {
-
-		errors["parse_error"] = err.Error()
-		errors["receipt"] = "unrecognized file format"
-		return nil, errors
+		errors["receipt"] = "invalid file type"
+		return nil, errBadRequest, errors
 	}
-	// todo complete implementation: save receipt, unzip drug images and save same
-	return &report, errors
+	defer file.Close()
+	filenameParts := strings.Split(header.Filename, ".")
+	fileExtension := filenameParts[len(filenameParts)-1]
+	saveAs := fmt.Sprintf("%s_receipt.%s", report.UserID, fileExtension)
+	savedFileUrl, err := saveFile(file, saveAs, cfg.incidenceReportReceiptImagePath)
+	if err != nil {
+		errors["error"] = err.Error()
+		return nil, errInternal, errors
+	}
+	report.ReceiptImageUrl = savedFileUrl
+
+	zippedFiles, header, err := r.FormFile("evidence_images")
+	if err != nil {
+		errors["receipt"] = "invalid file type"
+		return nil, errBadRequest, errors
+	}
+
+	errType, err := unzipAndSave(zippedFiles, header, cfg.incidenceReportDrugImagePath)
+	if err != nil {
+		errors["error"] = err.Error()
+		return nil, errType, errors
+	}
+	// todo obtain correct save path
+	report.EvidenceImagesUrl = cfg.incidenceReportDrugImagePath
+	return &report, nil, nil
+}
+
+func (app *app) processValidation(w http.ResponseWriter, r *http.Request, drug *model.Drug, err error) {
+	if err == db.ErrDrugNotFound {
+		app.sendDrugNotFoundResponse(w, r)
+	}
+
+	if err != nil {
+		errs := make(map[string]string)
+		errs["error"] = err.Error()
+		app.sendFailedValidationResponse(w, r, errs)
+		return
+	}
+
+	app.sendDrugFoundResponse(w, r, drug)
+}
+
+// sendDrugNotFoundResponse sends appropriate response if drug is not found in repo.
+func (app *app) sendDrugNotFoundResponse(w http.ResponseWriter, r *http.Request) {
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "Not Found",
+	}, r, map[string]string{
+		"report_type": "Unsafe",
+	})
+}
+
+// sendDrugFoundResponse sends safe or expiry product response,
+// depending on if product expires in the next 7 days
+func (app *app) sendDrugFoundResponse(w http.ResponseWriter, r *http.Request, drug *model.Drug) {
+
+	// check that drug is not expiring in the next 7 days
+	if time.Now().Add(time.Hour * 168).After(drug.Expiry) {
+		app.sendAPIResponse(&responseWriterArgs{
+			writer:     w,
+			statusCode: 200,
+			status:     true,
+			message:    "Expired Drug",
+		}, r, map[string]interface{}{
+			"report_type": "expired",
+			"drug":        drug,
+		})
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "Valid Drug",
+	}, r, map[string]interface{}{
+		"report_type": "safe",
+		"drug":        drug,
+	})
 }

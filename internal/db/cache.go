@@ -96,6 +96,14 @@ func (c *Cache) FetchUserID() (string, error) {
 	return c.FetchUserID()
 }
 
+func (c *Cache) IsValidUser(id string) error {
+	_, ok := c.userIds[id]
+	if !ok {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
 func (c *Cache) FetchRandomQRCode() (string, error) {
 	rand.Seed(time.Now().UnixNano())
 	drugs := []model.Drug{sampleDrug1, sampleDrug2, sampleDrug1}
@@ -120,7 +128,7 @@ func (c *Cache) CreateTaskReport(report *model.TasksReport) error {
 func (c *Cache) ValidateQrText(value string) (*model.Drug, error) {
 	drug := model.DrugFromString(value)
 	if drug == nil {
-		return nil, errors.New("invalid QR data")
+		return nil, ErrDrugNotFound
 	}
 	vOption, ok := c.drugs[*drug]
 
@@ -128,13 +136,13 @@ func (c *Cache) ValidateQrText(value string) (*model.Drug, error) {
 		return drug, nil
 	}
 
-	return nil, errors.New("drug data not found in HeartNet repository")
+	return nil, ErrDrugNotFound
 }
 
 func (c *Cache) ValidateShortCode(value string) (*model.Drug, error) {
 	drug, ok := c.shortCodes[value]
 	if !ok {
-		return nil, errors.New("invalid tracking code")
+		return nil, ErrDrugNotFound
 	}
 	return drug, nil
 }
@@ -142,7 +150,7 @@ func (c *Cache) ValidateShortCode(value string) (*model.Drug, error) {
 func (c *Cache) ValidateRFIDText(value string) (*model.Drug, error) {
 	drug, ok := c.shortCodes[value]
 	if !ok {
-		return nil, errors.New("invalid tracking code")
+		return nil, ErrDrugNotFound
 	}
 	return drug, nil
 }
@@ -151,8 +159,6 @@ func (c *Cache) SubmitIncidenceReport(report *model.IncidenceReport) error {
 	*c.incidenceReports = append(*c.incidenceReports, *report)
 	return nil
 }
-
-var ErrUserNotFound = errors.New("user not found")
 
 func (c *Cache) FetchWalletAddress(forUserId string) (string, error) {
 	addr, ok := c.userIds[forUserId]

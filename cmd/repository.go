@@ -17,6 +17,10 @@ type Repository interface {
 	CreateTaskReport(report *model.TasksReport) error
 	FetchAllTasks() ([]string, error)
 
+	// IsValidUser checks if id exists in repo.
+	// Returns db.ErrUserNotFound if not found, db error otherwise
+	IsValidUser(id string) error
+
 	// InsertMultipleDrugs assigns tracking code (i.e rfid text or alphanum
 	// code depending on validationOption) to each drug and inserts same
 	// into the repository
@@ -41,7 +45,18 @@ type Repository interface {
 }
 
 type Validator interface {
+
+	// ValidateQrText validates the text value read from
+	// the qr reader.
+	// If not found, return db.ErrDrugNotFound
 	ValidateQrText(value string) (*model.Drug, error)
+
+	// ValidateShortCode validates short code.
+	// If not found, return db.ErrDrugNotFound
 	ValidateShortCode(value string) (*model.Drug, error)
+
+	// ValidateRFIDText validates the text value read from
+	// the RFID tag.
+	// If not found, return db.ErrDrugNotFound
 	ValidateRFIDText(value string) (*model.Drug, error)
 }

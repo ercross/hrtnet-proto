@@ -20,6 +20,11 @@ const (
 	ValidationError
 )
 
+var (
+	ErrUserNotFound = errors.New("user not found")
+	ErrDrugNotFound = errors.New("drug data not found")
+)
+
 const (
 	tasksCollectionName       string = "tasks"
 	qrCodeDataCollectionName  string = "qrCodes"

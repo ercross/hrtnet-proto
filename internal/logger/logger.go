@@ -1,10 +1,15 @@
 package logger
 
 import (
+	"fmt"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"net/http"
 	"os"
+
+	"time"
 )
 
 // Logger must be initialized with NewLogger before use.
@@ -28,7 +33,11 @@ func NewLogger(isProduction bool) *logger {
 // in the normal processes of the app
 // @action specifies what action is being performed when this logger was invoked
 func (l *logger) LogInfo(message string) {
-	l.log.Info(message)
+	l.log.Info("********* APP INFO ********", zap.Field{
+		Key:    "Message",
+		Type:   zapcore.StringType,
+		String: message,
+	})
 }
 
 // LogWarn logs  level is used when you have detected an unexpected application problem
@@ -96,9 +105,36 @@ func encoders(isProduction bool) zapcore.Core {
 		EncodeCaller:   zapcore.FullCallerEncoder,
 	}
 
-	// infoLog also log for higher log levels:: warn, error, and fatal
+	// production log writers
 	infoLogsProduction := zapcore.AddSync(&lumberjack.Logger{
 		Filename:   "./logs/info.log",
+		MaxSize:    10,
+		MaxAge:     30,
+		MaxBackups: 2,
+		LocalTime:  true,
+		Compress:   true,
+	})
+
+	warningLogsProduction := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   "./logs/warning.log",
+		MaxSize:    10,
+		MaxAge:     30,
+		MaxBackups: 2,
+		LocalTime:  true,
+		Compress:   true,
+	})
+
+	errorLogsProduction := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   "./logs/error.log",
+		MaxSize:    10,
+		MaxAge:     30,
+		MaxBackups: 2,
+		LocalTime:  true,
+		Compress:   true,
+	})
+
+	fatalLogsProduction := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   "./logs/fatal.log",
 		MaxSize:    10,
 		MaxAge:     30,
 		MaxBackups: 2,
@@ -112,11 +148,108 @@ func encoders(isProduction bool) zapcore.Core {
 	json := zapcore.NewJSONEncoder(encoderConfig)
 	console := zapcore.NewConsoleEncoder(encoderConfig)
 
+	var infoLevel infoEnabler
+	var warnLevel warnEnabler
+	var errorLevel errorEnabler
+	var fatalLevel fatalEnabler
+
 	if isProduction {
-		return zapcore.NewCore(json, infoLogsProduction, zap.InfoLevel)
-
+		return zapcore.NewTee(
+			// these links each logger.LogXXX to their respective log file
+			// through the internal calling of zap's methods l.Log.XXX.
+			zapcore.NewCore(json, infoLogsProduction, infoLevel),
+			zapcore.NewCore(json, warningLogsProduction, warnLevel),
+			zapcore.NewCore(json, errorLogsProduction, errorLevel),
+			zapcore.NewCore(json, fatalLogsProduction, fatalLevel),
+		)
 	} else {
-		return zapcore.NewCore(console, allDevelopmentLogs, zap.InfoLevel)
-
+		return zapcore.NewTee(
+			zapcore.NewCore(console, allDevelopmentLogs, zap.InfoLevel),
+		)
 	}
+}
+
+// By default, using zapcore.InfoLevel as zapcore.LevelEnabler will cause
+// the info log file to contain error logs as well because the Enabled method
+// for zapcore.InfoLevel returns true for all higher (warn, error, and fatal) levels
+type infoEnabler int8
+type warnEnabler int8
+type errorEnabler int8
+type fatalEnabler int8
+
+func (i infoEnabler) Enabled(level zapcore.Level) bool {
+	if level == zapcore.InfoLevel {
+		return true
+	}
+	return false
+}
+
+func (w warnEnabler) Enabled(level zapcore.Level) bool {
+	if level == zapcore.WarnLevel {
+		return true
+	}
+	return false
+}
+
+func (e errorEnabler) Enabled(level zapcore.Level) bool {
+	if level == zapcore.ErrorLevel {
+		return true
+	}
+	return false
+}
+
+func (f fatalEnabler) Enabled(level zapcore.Level) bool {
+	if level == zapcore.FatalLevel {
+		return true
+	}
+	return false
+}
+
+// LogServe logs http.Request and necessary info about the response for the request
+func (l *logger) LogServe(statusCode int, request *http.Request) {
+	received := request.Header.Get("Time-Received")
+	var duration time.Duration
+	if received != "" {
+		pt, err := time.Parse(time.RFC3339, received)
+		if err != nil {
+			l.LogError("error parsing request header value Time-Received",
+				"logging server request/response", err)
+		}
+		duration = time.Since(pt)
+	} else {
+		duration = time.Since(time.Now())
+	}
+
+	l.log.Info("********** SERVER ***********",
+		zap.Field{
+			Key:    "IP-Addr",
+			Type:   zapcore.StringType,
+			String: request.RemoteAddr,
+		},
+		zap.Field{
+			Key:    "Method",
+			Type:   zapcore.StringType,
+			String: request.Method,
+		},
+		zap.Field{
+			Key:    "Path",
+			Type:   zapcore.StringType,
+			String: request.URL.Path,
+		},
+		zap.Field{
+			Key:    "Status Code",
+			Type:   zapcore.StringType,
+			String: fmt.Sprintf("%d", statusCode),
+		},
+		zap.Field{
+			Key:    "Status",
+			Type:   zapcore.StringType,
+			String: http.StatusText(statusCode),
+		},
+		zap.Field{
+			Key:    "Duration",
+			Type:   zapcore.StringType,
+			String: duration.String(),
+		},
+	)
 }
