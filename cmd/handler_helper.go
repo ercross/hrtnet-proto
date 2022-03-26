@@ -6,6 +6,7 @@ import (
 	"github.com/Hrtnet/social-activities/internal/db"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
+	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"io"
 	"net/http"
@@ -166,8 +167,10 @@ func validateTaskReport(report *model.TasksReport) (errs map[string]string) {
 
 // extractIncidenceReport extracts incidence report data from the request.
 // Request content-type must be multipart/form-data.
-// Any error returned is a client error
-func (app *app) extractIncidenceReport(r *http.Request, cfg config) (*model.IncidenceReport, errorType, map[string]string) {
+// Any error returned is a client error.
+// Receipt file name is saved as userId_unixTime.
+// Evidence images are saved in a userId_unixTime directory
+func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.IncidenceReport, errorType, map[string]string) {
 	var report model.IncidenceReport
 	errors := make(map[string]string)
 
@@ -198,7 +201,7 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg config) (*model.Inci
 	defer file.Close()
 	filenameParts := strings.Split(header.Filename, ".")
 	fileExtension := filenameParts[len(filenameParts)-1]
-	saveAs := fmt.Sprintf("%s_receipt.%s", report.UserID, fileExtension)
+	saveAs := fmt.Sprintf("%s_%d.%s", report.UserID, time.Now().Unix(), fileExtension)
 	savedFileUrl, err := saveFile(file, saveAs, cfg.incidenceReportReceiptImagePath)
 	if err != nil {
 		errors["error"] = err.Error()
@@ -212,19 +215,21 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg config) (*model.Inci
 		return nil, errBadRequest, errors
 	}
 
-	errType, err := unzipAndSave(zippedFiles, header, cfg.incidenceReportDrugImagePath)
+	saveDir := fmt.Sprintf("%s/%s_%d", cfg.incidenceReportDrugImagePath, report.UserID, time.Now().Unix())
+	savePaths, errType, err := unzipAndSave(zippedFiles, header, saveDir)
 	if err != nil {
 		errors["error"] = err.Error()
 		return nil, errType, errors
 	}
 	// todo obtain correct save path
-	report.EvidenceImagesUrl = cfg.incidenceReportDrugImagePath
+	report.EvidenceImagesUrl = *savePaths
 	return &report, nil, nil
 }
 
-func (app *app) processValidation(w http.ResponseWriter, r *http.Request, drug *model.Drug, err error) {
+func (app *app) processValidation(w http.ResponseWriter, r *http.Request, drug *model.Drug, userId string, err error) {
 	if err == db.ErrDrugNotFound {
 		app.sendDrugNotFoundResponse(w, r)
+		app.notificationHub.Dispatch(model.NewValidationNotification(userId, "Drug not found"))
 		return
 	}
 
@@ -234,7 +239,7 @@ func (app *app) processValidation(w http.ResponseWriter, r *http.Request, drug *
 		app.sendFailedValidationResponse(w, r, errs)
 		return
 	}
-
+	app.notificationHub.Dispatch(model.NewValidationNotification(userId, "Drug is authentic"))
 	app.sendDrugFoundResponse(w, r, drug)
 }
 
@@ -277,4 +282,10 @@ func (app *app) sendDrugFoundResponse(w http.ResponseWriter, r *http.Request, dr
 		"report_type": "safe",
 		"drug":        drug,
 	})
+}
+
+// dispatchNotification sends notification to the websocket connection, conn
+func dispatchNotification(notification model.Notification, conn *websocket.Conn) interface{} {
+	conn.WriteJSON(notification)
+	return nil
 }

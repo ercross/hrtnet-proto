@@ -25,6 +25,9 @@ type Cache struct {
 	rfidText map[string]*model.Drug
 
 	incidenceReports *[]model.IncidenceReport
+
+	// maps userId to slice of notifications
+	notifications map[string]*[]model.Notification
 }
 
 var sampleDrug1 = model.Drug{
@@ -57,11 +60,40 @@ func InitCache() *Cache {
 	c.shortCodes = make(map[string]*model.Drug)
 	c.incidenceReports = &[]model.IncidenceReport{}
 	c.userIds = make(map[string]string)
+	c.notifications = make(map[string]*[]model.Notification)
 	return &c
 }
 
 func (c *Cache) Disconnect() error {
 	return nil
+}
+
+func (c *Cache) SaveNotification(notification *model.Notification) error {
+	if _, ok := c.notifications[notification.UserID]; !ok {
+		c.notifications[notification.UserID] = &[]model.Notification{*notification}
+	}
+	list := c.notifications[notification.UserID]
+	*list = append(*list, *notification)
+	return nil
+}
+
+func (c *Cache) ReadNotification(userId, notificationId string) error {
+	ptr, _ := c.FetchAllUnreadNotifications(userId)
+	list := *ptr
+
+	for idx, notification := range list {
+		if notification.ID == notificationId {
+
+			// slice out the notification
+			list = list[idx-1 : len(list)-1]
+		}
+	}
+	ptr = &list
+	return nil
+}
+
+func (c *Cache) FetchAllUnreadNotifications(forUserId string) (*[]model.Notification, error) {
+	return c.notifications[forUserId], nil
 }
 
 func (c *Cache) FetchAllTasks() ([]string, error) {

@@ -23,8 +23,9 @@ type config struct {
 }
 
 type app struct {
-	config config
-	repo   Repository
+	config          *config
+	repo            Repository
+	notificationHub *NotificationHub
 }
 
 // createDirs creates necessary file server directories with
@@ -45,9 +46,10 @@ func main() {
 	//	logger.Logger.LogFatal("error connecting to database", "", err)
 	//}
 	app := &app{
-		config: cfg,
+		config: &cfg,
 		repo:   db.InitCache(),
 	}
+	app.notificationHub = NewNotificationHub(db.InitCache())
 	defer app.repo.Disconnect()
 
 	app.serve()
@@ -75,7 +77,6 @@ func initConfig() config {
 	flag.StringVar(&config.apiUrl, "apiUrl", "localhost", "api endpoint")
 	flag.Parse()
 
-	fmt.Println("isProduction", config.environment == model.Production)
 	if config.environment == model.Development {
 		if err := godotenv.Load(); err != nil {
 			logger.Logger.LogFatal("error loading env file", "initializing app config", err)
@@ -85,5 +86,6 @@ func initConfig() config {
 	}
 	config.incidenceReportDrugImagePath = "./res/images/incidence-reports/drugs"
 	config.incidenceReportReceiptImagePath = "./res/images/incidence-reports/receipts"
+
 	return config
 }

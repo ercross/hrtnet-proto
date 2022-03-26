@@ -44,6 +44,17 @@ type Repository interface {
 	SubmitIncidenceReport(report *model.IncidenceReport) error
 }
 
+type NotificationRepo interface {
+	SaveNotification(notification *model.Notification) error
+
+	// ReadNotification deletes notification identified by notificationId.
+	// If notificationId isn't found in repo, ReadNotification safely returns.
+	// Clients can persist notifications that has already been read by user.
+	ReadNotification(userId, notificationId string) error
+
+	FetchAllUnreadNotifications(forUserId string) (*[]model.Notification, error)
+}
+
 type Validator interface {
 
 	// ValidateQrText validates the text value read from

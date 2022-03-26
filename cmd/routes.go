@@ -42,7 +42,7 @@ func (app *app) routes() http.Handler {
 	mux.Post("/api/validate-code", app.validateShortCode)
 	mux.Post("/api/validate-rfid", app.validateRFIDText)
 
-	mux.Get("/notification", app.dispatchNotifications)
+	mux.Get("/api/notifications/{user_id}", app.notifications)
 
 	mux.MethodNotAllowed(app.sendMethodNotAllowedResponse)
 	mux.NotFound(app.sendNotFoundResponse)

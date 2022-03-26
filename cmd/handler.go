@@ -9,6 +9,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/skip2/go-qrcode"
 	"net/http"
+	"strings"
+	"time"
 )
 
 // serveAllTaskReports serves activities statistics
@@ -102,6 +104,7 @@ func (app *app) submitTaskReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.notificationHub.Dispatch(model.NewTaskReportNotification(report.UserID))
 	app.sendAPIResponse(&responseWriterArgs{
 		writer:     w,
 		statusCode: 200,
@@ -127,11 +130,8 @@ func (app *app) validateQrCode(w http.ResponseWriter, r *http.Request) {
 		app.sendBadRequestResponse(w, r, err)
 		return
 	}
-
-	qr := model.DrugFromString(in.Data)
-	if qr == nil {
-		errs := make(map[string]string, 1)
-		errs["error"] = "invalid QR Code"
+	if err := app.repo.IsValidUser(in.UserID); err != nil {
+		errs := map[string]string{"user_id": "invalid user id"}
 		app.sendFailedValidationResponse(w, r, errs)
 		return
 	}
@@ -156,6 +156,12 @@ func (app *app) validateShortCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := app.repo.IsValidUser(in.UserID); err != nil {
+		errs := map[string]string{"user_id": "invalid user id"}
+		app.sendFailedValidationResponse(w, r, errs)
+		return
+	}
+
 	drug, err := app.repo.ValidateShortCode(in.Data)
 	app.processValidation(w, r, drug, err)
 }
@@ -173,6 +179,12 @@ func (app *app) validateRFIDText(w http.ResponseWriter, r *http.Request) {
 	err := app.readJSON(w, r, &in)
 	if err != nil {
 		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	if err := app.repo.IsValidUser(in.UserID); err != nil {
+		errs := map[string]string{"user_id": "invalid user id"}
+		app.sendFailedValidationResponse(w, r, errs)
 		return
 	}
 
@@ -220,6 +232,7 @@ func (app *app) serveStarterPack(w http.ResponseWriter, r *http.Request) {
 	}, r, map[string]interface{}{
 		"user_id": userId,
 	})
+	app.notificationHub.Dispatch(model.NewWelcomeNotification(userId))
 	return
 }
 
@@ -263,6 +276,7 @@ func (app *app) serveWalletAddress(w http.ResponseWriter, r *http.Request) {
 		status:     true,
 		message:    fmt.Sprintf("%s wallet address", userId),
 	}, r, map[string]string{"address": addr})
+	app.notificationHub.Dispatch(model.NewWelcomeBackNotification(userId))
 }
 
 var errFileTooLarge = errors.New("file too large")
@@ -275,8 +289,11 @@ var errFileTooLarge = errors.New("file too large")
 //		pharmacy_name string *required
 //		description string *required
 //		pharmacy_location string *required
-// 		evidence_images multipartfile (Content-Type: application/png, Content-Encoding: gzip) *required
+// 		evidence_images multipartfile (Content-Type: application/png, Content-Encoding: zip) *required
 //		receipt multipartfile (Content-Type file/image)
+//
+// Since there's currently no cap on the number of evidence_images that can be
+// attached to the request, all evidence_images must be zipped (i.e compressed as zip)
 func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 
 	// Max memory::32 MB
@@ -294,6 +311,7 @@ func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 		app.sendFailedValidationResponse(w, r, errs)
 		return
 	}
+	fmt.Println("---------------------------------------------", report)
 
 	if err := app.repo.SubmitIncidenceReport(report); err != nil {
 		app.sendServerErrorResponse(w, r, errors.Wrap(err, "error submitting incidence report"))
@@ -307,37 +325,65 @@ func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 		message: "Your report has been submitted successfully. " +
 			"Our investigation partners will look into your report swiftly",
 	}, r, nil)
+	app.notificationHub.Dispatch(model.NewIncidenceReportNotification(report.UserID))
 }
 
 var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	HandshakeTimeout: 10 * time.Second,
+	ReadBufferSize:   1024,
+	WriteBufferSize:  1024,
+	CheckOrigin:      func(r *http.Request) bool { return true },
 }
 
-func (app *app) dispatchNotifications(w http.ResponseWriter, r *http.Request) {
+// notifications upgrades an http connection to websocket and dispatches
+// unread model.Notification messages to the client immediately after a successful connection.
+//
+// Clients can request for unread connections by sending the text getAllUnread.
+//
+// Clients can also mark a notification as read by sending the text read->[notificationID],
+// e.g., read->qw124fdifhe848skdi3s, which consequentially prompts the server
+// to delete such notification from storage.
+// The above implies that this server doesn't persist notifications that has been
+// read by the client. So clients should take on the responsibility of persisting such.
+func (app *app) notifications(w http.ResponseWriter, r *http.Request) {
+
+	// check that userId in url path is valid
+	urlPaths := strings.Split(r.URL.Path, "/")
+	userId := urlPaths[len(urlPaths)-1]
+	if err := app.repo.IsValidUser(userId); err != nil {
+		if err == db.ErrUserNotFound {
+			app.sendMethodNotAllowedResponse(w, r)
+			return
+		}
+	}
+
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Logger.LogError("error upgrading connection to websocket", "dispatch notification", err)
 		return
 	}
 
-	err = conn.WriteJSON(struct {
-		Message string `json:"message"`
-	}{
-		Message: "Don't do this",
-	})
-	if err != nil {
-		fmt.Println("error encountered:: ", err)
+	app.notificationHub.AddConnection(userId, conn)
+	app.notificationHub.DispatchAllUnread(userId)
+
+	for {
+
+		// Read from connection indefinitely to detect closed connection.
+		// From gorilla websocket documentation, messageType is either TextMessage or BinaryMessage.
+		msgType, msg, err := conn.ReadMessage()
+		if err != nil {
+			app.notificationHub.RemoveConnection(userId)
+		}
+		if msgType == websocket.TextMessage && string(msg) == "getAllUnread" {
+			app.notificationHub.DispatchAllUnread(userId)
+			continue
+		}
+
+		msgParts := strings.Split(string(msg), "->")
+		if msgType == websocket.TextMessage && len(msgParts) > 1 {
+			notificationID := msgParts[1]
+			app.notificationHub.storage.ReadNotification(userId, notificationID)
+		}
+
 	}
-	//for {
-	//	messageType, p, err := conn.ReadMessage()
-	//	if err != nil {
-	//		log.Println(err)
-	//		return
-	//	}
-	//	if err := conn.WriteMessage(messageType, p); err != nil {
-	//		log.Println(err)
-	//		return
-	//	}
-	//}
 }
