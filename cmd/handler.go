@@ -137,7 +137,7 @@ func (app *app) validateQrCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drug, err := app.repo.ValidateQrText(in.Data)
-	app.processValidation(w, r, drug, err)
+	app.processValidation(w, r, drug, in.UserID, err)
 }
 
 // validateShortCode
@@ -163,7 +163,7 @@ func (app *app) validateShortCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drug, err := app.repo.ValidateShortCode(in.Data)
-	app.processValidation(w, r, drug, err)
+	app.processValidation(w, r, drug, in.UserID, err)
 }
 
 // validateShortCode
@@ -189,7 +189,7 @@ func (app *app) validateRFIDText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drug, err := app.repo.ValidateShortCode(in.Data)
-	app.processValidation(w, r, drug, err)
+	app.processValidation(w, r, drug, in.UserID, err)
 }
 
 // serveQrCode serves a single QrCode instance to client
