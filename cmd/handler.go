@@ -311,7 +311,6 @@ func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 		app.sendFailedValidationResponse(w, r, errs)
 		return
 	}
-	fmt.Println("---------------------------------------------", report)
 
 	if err := app.repo.SubmitIncidenceReport(report); err != nil {
 		app.sendServerErrorResponse(w, r, errors.Wrap(err, "error submitting incidence report"))
@@ -341,7 +340,7 @@ var wsUpgrader = websocket.Upgrader{
 // Clients can request for unread connections by sending the text getAllUnread.
 //
 // Clients can also mark a notification as read by sending the text read->[notificationID],
-// e.g., read->qw124fdifhe848skdi3s, which consequentially prompts the server
+// e.g., read:qw124fdifhe848skdi3s, which consequentially prompts the server
 // to delete such notification from storage.
 // The above implies that this server doesn't persist notifications that has been
 // read by the client. So clients should take on the responsibility of persisting such.
@@ -357,12 +356,15 @@ func (app *app) notifications(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// upgrade http connection
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Logger.LogError("error upgrading connection to websocket", "dispatch notification", err)
 		return
 	}
 
+	// send notifications
+	logger.Logger.LogServe(200, r)
 	app.notificationHub.AddConnection(userId, conn)
 	app.notificationHub.DispatchAllUnread(userId)
 
@@ -372,15 +374,19 @@ func (app *app) notifications(w http.ResponseWriter, r *http.Request) {
 		// From gorilla websocket documentation, messageType is either TextMessage or BinaryMessage.
 		msgType, msg, err := conn.ReadMessage()
 		if err != nil {
+			logger.Logger.LogError(fmt.Sprintf("removing websocket connection for %s", userId),
+				"reading from websocket connection", err)
 			app.notificationHub.RemoveConnection(userId)
+			break
 		}
 		if msgType == websocket.TextMessage && string(msg) == "getAllUnread" {
 			app.notificationHub.DispatchAllUnread(userId)
 			continue
 		}
 
-		msgParts := strings.Split(string(msg), "->")
+		msgParts := strings.Split(string(msg), ":")
 		if msgType == websocket.TextMessage && len(msgParts) > 1 {
+			fmt.Println("---------------Got message to delete read notification---------------")
 			notificationID := msgParts[1]
 			app.notificationHub.storage.ReadNotification(userId, notificationID)
 		}

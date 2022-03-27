@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
 	"github.com/gorilla/websocket"
@@ -79,6 +80,7 @@ func (hub *NotificationHub) RemoveConnection(userId string) {
 	for id, _ := range hub.connections {
 		if id == userId {
 			delete(hub.connections, userId)
+			logger.Logger.LogInfo(fmt.Sprintf("removed user %s websocket connection from pool", userId))
 		}
 	}
 	hub.connLock.Unlock()

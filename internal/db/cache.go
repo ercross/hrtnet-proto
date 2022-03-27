@@ -71,6 +71,7 @@ func (c *Cache) Disconnect() error {
 func (c *Cache) SaveNotification(notification *model.Notification) error {
 	if _, ok := c.notifications[notification.UserID]; !ok {
 		c.notifications[notification.UserID] = &[]model.Notification{*notification}
+		return nil
 	}
 	list := c.notifications[notification.UserID]
 	*list = append(*list, *notification)
@@ -85,10 +86,10 @@ func (c *Cache) ReadNotification(userId, notificationId string) error {
 		if notification.ID == notificationId {
 
 			// slice out the notification
-			list = list[idx-1 : len(list)-1]
+			list = append(list[:idx], list[idx+1:]...)
 		}
 	}
-	ptr = &list
+	c.notifications[userId] = &list
 	return nil
 }
 
