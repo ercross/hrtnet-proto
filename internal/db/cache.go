@@ -24,6 +24,9 @@ type Cache struct {
 	// maps rfidText to drug
 	rfidText map[string]*model.Drug
 
+	// maps qrCode string to drug
+	qrCodes map[string]*model.Drug
+
 	incidenceReports *[]model.IncidenceReport
 
 	// maps userId to slice of notifications
@@ -57,10 +60,19 @@ func InitCache() *Cache {
 	}
 	c.taskReports = make(map[string]model.TasksReport)
 	c.rfidText = make(map[string]*model.Drug)
+
+	// initialize short codes
 	c.shortCodes = make(map[string]*model.Drug)
+	c.shortCodes["12345678"] = &sampleDrug2
+
 	c.incidenceReports = &[]model.IncidenceReport{}
 	c.userIds = make(map[string]string)
 	c.notifications = make(map[string]*[]model.Notification)
+
+	// initialize qr codes
+	c.qrCodes = make(map[string]*model.Drug)
+	c.qrCodes[sampleDrug2.String()] = &sampleDrug2
+	c.qrCodes[sampleDrug1.String()] = &sampleDrug1
 	return &c
 }
 

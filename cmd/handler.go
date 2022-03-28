@@ -386,7 +386,7 @@ func (app *app) notifications(w http.ResponseWriter, r *http.Request) {
 
 		msgParts := strings.Split(string(msg), ":")
 		if msgType == websocket.TextMessage && len(msgParts) > 1 {
-			fmt.Println("---------------Got message to delete read notification---------------")
+
 			notificationID := msgParts[1]
 			app.notificationHub.storage.ReadNotification(userId, notificationID)
 		}

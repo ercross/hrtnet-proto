@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -196,6 +197,7 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 	file, header, err := r.FormFile("receipt")
 	if err != nil {
 		errors["receipt"] = "invalid file type"
+		errors["extra"] = err.Error()
 		return nil, errBadRequest, errors
 	}
 	defer file.Close()
@@ -209,9 +211,12 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 	}
 	report.ReceiptImageUrl = savedFileUrl
 
+	// save evidence images
 	zippedFiles, header, err := r.FormFile("evidence_images")
 	if err != nil {
-		errors["receipt"] = "invalid file type"
+		os.Remove(report.ReceiptImageUrl)
+		errors["evidence_images"] = "parse error"
+		errors["error"] = err.Error()
 		return nil, errBadRequest, errors
 	}
 
