@@ -248,7 +248,7 @@ func (m *Mongo) createDrugsCollection() {
 				"description": "the validation data embedded on the drug container",
 			},
 			"drug": bson.M{
-				"bsonType": "string",
+				"bsonType": "object",
 				"required": []string{"name", "expiry", "batchNumber", "manufacturer", "manufactureDate"},
 				"properties": bson.M{
 					"expiry": bson.M{
@@ -281,7 +281,7 @@ func (m *Mongo) createDrugsCollection() {
 			"create drugs collection", err)
 	}
 	if err := m.seedDrugs(); err != nil {
-		logger.Logger.LogError("failed to drugs collection",
+		logger.Logger.LogError("failed to seed drugs collection",
 			"seed drugs", err)
 	}
 }
