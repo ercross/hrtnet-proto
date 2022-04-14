@@ -10,7 +10,7 @@ import (
 
 type Cache struct {
 	// maps userId to task report
-	taskReports map[string]model.TasksReport
+	taskReports map[string]model.AirdropSubmission
 	tasks       []string
 
 	// maps user id to wallet address
@@ -33,22 +33,6 @@ type Cache struct {
 	notifications map[string]*[]model.Notification
 }
 
-var sampleDrug1 = model.Drug{
-	Manufacturer:   "Heart Pharm",
-	Name:           "Chloramphenicol",
-	ManufacturedOn: time.Now(),
-	Expiry:         time.Now().Add(time.Hour * 72),
-	BatchNumber:    "1234BRQ",
-}
-
-var sampleDrug2 = model.Drug{
-	Manufacturer:   "Heart Pharm",
-	Name:           "Loxagyl",
-	ManufacturedOn: time.Now(),
-	Expiry:         time.Now().Add(time.Hour * 72),
-	BatchNumber:    "1234BRQ",
-}
-
 func InitCache() *Cache {
 	var c Cache
 	c.tasks = []string{
@@ -58,12 +42,12 @@ func InitCache() *Cache {
 		"Join our Discord server",
 		"Using your User ID as your referral ID, refer 5 of your friends to join our telegram community",
 	}
-	c.taskReports = make(map[string]model.TasksReport)
+	c.taskReports = make(map[string]model.AirdropSubmission)
 	c.rfidText = make(map[string]*model.Drug)
 
 	// initialize short codes
 	c.shortCodes = make(map[string]*model.Drug)
-	c.shortCodes["12345678"] = &sampleDrug2
+	c.shortCodes["12345678"] = &model.SampleDrug2
 
 	c.incidenceReports = &[]model.IncidenceReport{}
 	c.userIds = make(map[string]string)
@@ -71,8 +55,8 @@ func InitCache() *Cache {
 
 	// initialize qr codes
 	c.qrCodes = make(map[string]*model.Drug)
-	c.qrCodes[sampleDrug2.String()] = &sampleDrug2
-	c.qrCodes[sampleDrug1.String()] = &sampleDrug1
+	c.qrCodes[model.SampleDrug2.String()] = &model.SampleDrug2
+	c.qrCodes[model.SampleDrug1.String()] = &model.SampleDrug1
 	return &c
 }
 
@@ -113,8 +97,8 @@ func (c *Cache) FetchAllTasks() ([]string, error) {
 	return c.tasks, nil
 }
 
-func (c *Cache) FetchAllTaskReports() (*[]model.TasksReport, error) {
-	var tr []model.TasksReport
+func (c *Cache) FetchAllAirdropSubmissions() (*[]model.AirdropSubmission, error) {
+	var tr []model.AirdropSubmission
 	for _, value := range c.taskReports {
 		tr = append(tr, value)
 	}
@@ -151,12 +135,12 @@ func (c *Cache) IsValidUser(id string) error {
 
 func (c *Cache) FetchRandomQRCode() (string, error) {
 	rand.Seed(time.Now().UnixNano())
-	drugs := []model.Drug{sampleDrug1, sampleDrug2, sampleDrug1}
+	drugs := []model.Drug{model.SampleDrug1, model.SampleDrug2, model.SampleDrug3}
 	random := rand.Intn(len(drugs) - 1)
 	return drugs[random].String(), nil
 }
 
-func (c *Cache) FetchTaskReportByUserID(userId string) (*model.TasksReport, error) {
+func (c *Cache) FetchAirdropSubmissionByUserID(userId string) (*model.AirdropSubmission, error) {
 	report, ok := c.taskReports[userId]
 	if ok {
 		return &report, nil
@@ -165,23 +149,17 @@ func (c *Cache) FetchTaskReportByUserID(userId string) (*model.TasksReport, erro
 	}
 }
 
-func (c *Cache) CreateTaskReport(report *model.TasksReport) error {
+func (c *Cache) InsertAirdropSubmission(report *model.AirdropSubmission) error {
 	c.taskReports[report.UserID] = *report
 	return nil
 }
 
 func (c *Cache) ValidateQrText(value string) (*model.Drug, error) {
-	drug := model.DrugFromString(value)
-	if drug == nil {
+	drug, ok := c.qrCodes[value]
+	if !ok {
 		return nil, ErrDrugNotFound
 	}
-	vOption, ok := c.drugs[*drug]
-
-	if ok && vOption == model.QrCode {
-		return drug, nil
-	}
-
-	return nil, ErrDrugNotFound
+	return drug, nil
 }
 
 func (c *Cache) ValidateShortCode(value string) (*model.Drug, error) {

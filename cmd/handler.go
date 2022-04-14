@@ -17,7 +17,7 @@ import (
 // METHOD: GET
 // Request must contain admin authorization
 func (app *app) serveAllTaskReports(w http.ResponseWriter, r *http.Request) {
-	reports, err := app.repo.FetchAllTaskReports()
+	reports, err := app.repo.FetchAllAirdropSubmissions()
 	if err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
@@ -39,7 +39,7 @@ func (app *app) serveAllTaskReports(w http.ResponseWriter, r *http.Request) {
 // Query parameter: user_id
 func (app *app) serveTaskReport(w http.ResponseWriter, r *http.Request) {
 	userId := r.URL.Query().Get("user_id")
-	report, err := app.repo.FetchTaskReportByUserID(userId)
+	report, err := app.repo.FetchAirdropSubmissionByUserID(userId)
 	if err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
@@ -54,52 +54,51 @@ func (app *app) serveTaskReport(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// serveTasks
-// Serves tasks to be completed by airdrop participants
-// for HeartNet airdrop program
-// METHOD: GET
-// Content-type: application/json
-func (app *app) serveTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := app.repo.FetchAllTasks()
-	if err != nil {
-		app.sendServerErrorResponse(w, r, errors.New("error fetching tasks"))
-		return
-	}
-	app.sendAPIResponse(&responseWriterArgs{
-		writer:     w,
-		statusCode: 200,
-		status:     true,
-		message:    "Welcome to HeartNet",
-	}, r, tasks)
-	return
-}
-
-// submitTaskReport
+// submitAirdropForm
 // METHOD: POST
 // Accept: application/json
 // Request Body fields
 // 			telegram_username string *required
 //			twitter_username string *required
 //			tweet_link string *required
-// 			youtube_username string *required
 // 			wallet_address string (must be present if email_address is absent
 //			email_address string (must be present if wallet_address is absent
 // 			user_id string *required
-func (app *app) submitTaskReport(w http.ResponseWriter, r *http.Request) {
+func (app *app) submitAirdropForm(w http.ResponseWriter, r *http.Request) {
 
-	var report model.TasksReport
+	var report model.AirdropSubmission
 	err := app.readJSON(w, r, &report)
 	if err != nil {
 		app.sendBadRequestResponse(w, r, err)
 		return
 	}
 
-	if errs := validateTaskReport(&report); errs != nil {
+	if errs := validateAirdropSubmission(&report); errs != nil {
 		app.sendFailedValidationResponse(w, r, errs)
 		return
 	}
 
-	if err = app.repo.CreateTaskReport(&report); err != nil {
+	// verify that user exist
+	user, err := app.repo.FetchUserInfo(report.UserID)
+	if err != nil {
+		if err == db.ErrUserNotFound || user.UID == "" {
+			app.sendBadRequestResponse(w, r, errors.New("UID missing"))
+			return
+		}
+	}
+
+	// verify that user hasn't made any previous submission
+	submission, err := app.repo.FetchAirdropSubmissionByUserID(user.UID)
+	if err != nil && err != db.ErrNoSubmissionFound {
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+	if submission != nil {
+		app.sendEditConflictResponse(w, r, "airdrop participation already recorded")
+		return
+	}
+
+	if err = app.repo.InsertAirdropSubmission(&report); err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
 	}
@@ -209,16 +208,18 @@ func (app *app) serveQrCode(w http.ResponseWriter, r *http.Request) {
 		app.sendServerErrorResponse(w, r, errors.Wrap(err, "error converting qr code to png"))
 		return
 	}
+
 	w.WriteHeader(200)
 	w.Write(raw)
-	return
+	logger.Logger.LogServe(200, r)
+
 }
 
 // serveStarterPack serves new user with userId and a wallet address
 // METHOD: GET
 // Content-Type: application/json
 func (app *app) serveStarterPack(w http.ResponseWriter, r *http.Request) {
-	userId, err := app.repo.FetchUserID()
+	userId, err := app.repo.GenerateNewUserID()
 	if err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
@@ -256,7 +257,7 @@ func (app *app) serveWalletAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, err := app.repo.FetchWalletAddress(userId)
+	user, err := app.repo.FetchUserInfo(userId)
 	if err == db.ErrUserNotFound {
 		app.sendAPIResponse(&responseWriterArgs{
 			writer:     w,
@@ -275,7 +276,7 @@ func (app *app) serveWalletAddress(w http.ResponseWriter, r *http.Request) {
 		statusCode: 200,
 		status:     true,
 		message:    fmt.Sprintf("%s wallet address", userId),
-	}, r, map[string]string{"address": addr})
+	}, r, map[string]string{"address": user.WalletAddress})
 	app.notificationHub.Dispatch(model.NewWelcomeBackNotification(userId))
 }
 
@@ -388,7 +389,7 @@ func (app *app) notifications(w http.ResponseWriter, r *http.Request) {
 		if msgType == websocket.TextMessage && len(msgParts) > 1 {
 
 			notificationID := msgParts[1]
-			app.notificationHub.storage.ReadNotification(userId, notificationID)
+			app.notificationHub.storage.ReadNotification(notificationID)
 		}
 
 	}

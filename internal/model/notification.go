@@ -11,16 +11,16 @@ import (
 type Notification struct {
 	ID string `json:"id"`
 
-	UserID string `json:"user_id"`
+	UserID string `json:"user_id" bson:"uid"`
 
-	Title string `json:"title"`
+	Title string `json:"title" bson:"title"`
 
-	Message string `json:"message"`
+	Message string `json:"message" bson:"message"`
 
 	// Read specifies if the message has already been read by the receiver
-	IsRead bool `json:"is_read"`
+	IsRead bool `json:"is_read" bson:"isRead"`
 
-	Sent time.Time `json:"sent"`
+	Sent time.Time `json:"sent" bson:"sent"`
 }
 
 // InsertID inserts ID into Notification.
@@ -72,7 +72,7 @@ func NewWelcomeBackNotification(userId string) *Notification {
 func NewIncidenceReportNotification(userId string) *Notification {
 	notification := &Notification{
 		UserID:  userId,
-		Title:   "Incidence Report Submitted",
+		Title:   "Incidence Report SubmittedOn",
 		Message: "We have received your incidence report and our investigative partners will look into the report. Thanks.",
 		IsRead:  false,
 		Sent:    time.Now(),

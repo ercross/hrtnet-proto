@@ -68,7 +68,6 @@ func (app *app) sendFailedValidationResponse(w http.ResponseWriter, r *http.Requ
 
 // sendEditConflictResponse sends a 409 Conflict status code
 // and JSON response to the client.
-func (app *app) sendEditConflictResponse(w http.ResponseWriter, r *http.Request) {
-	message := "unable to update the record due to an edit conflict, please try again"
+func (app *app) sendEditConflictResponse(w http.ResponseWriter, r *http.Request, message string) {
 	app.sendErrorResponse(w, r, http.StatusConflict, message, nil)
 }

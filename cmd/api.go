@@ -41,15 +41,15 @@ func main() {
 	cfg := initConfig()
 	logger.Logger = logger.NewLogger(cfg.environment == model.Production)
 	createDirs()
-	//mongo, err := db.Connect(cfg.dsn)
-	//if err != nil {
-	//	logger.Logger.LogFatal("error connecting to database", "", err)
-	//}
+	mongo, err := db.ConnectMongo(cfg.dsn)
+	if err != nil {
+		logger.Logger.LogFatal("error connecting to database", "", err)
+	}
 	app := &app{
 		config: &cfg,
-		repo:   db.InitCache(),
+		repo:   mongo,
 	}
-	app.notificationHub = NewNotificationHub(db.InitCache())
+	app.notificationHub = NewNotificationHub(mongo)
 	defer app.repo.Disconnect()
 
 	app.serve()
@@ -79,11 +79,10 @@ func initConfig() config {
 
 	if config.environment == model.Development {
 		if err := godotenv.Load(); err != nil {
-			logger.Logger.LogFatal("error loading env file", "initializing app config", err)
+			logger.Logger.LogFatal("failed to load env file", "initializing app config", err)
 		}
-
-		config.dsn = os.Getenv("DSN")
 	}
+	config.dsn = os.Getenv("DSN")
 	config.incidenceReportDrugImagePath = "./res/images/incidence-reports/drugs"
 	config.incidenceReportReceiptImagePath = "./res/images/incidence-reports/receipts"
 

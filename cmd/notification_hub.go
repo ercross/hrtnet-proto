@@ -59,7 +59,8 @@ func (hub *NotificationHub) DispatchAllUnread(forUserId string) {
 		// fetch all unread notifications from storage
 		notifications, err := hub.storage.FetchAllUnreadNotifications(forUserId)
 		if err != nil {
-			logger.Logger.LogError("unable to fetch user's all unread notifications", "dispatch all unread", err)
+			logger.Logger.LogError(fmt.Sprintf("unable to fetch user %s unread notifications", forUserId),
+				"dispatch all unread", err)
 			return
 		}
 
@@ -77,11 +78,7 @@ func (hub *NotificationHub) DispatchAllUnread(forUserId string) {
 // RemoveConnection removes inactive connections from connections.
 func (hub *NotificationHub) RemoveConnection(userId string) {
 	hub.connLock.Lock()
-	for id, _ := range hub.connections {
-		if id == userId {
-			delete(hub.connections, userId)
-			logger.Logger.LogInfo(fmt.Sprintf("removed user %s websocket connection from pool", userId))
-		}
-	}
+	delete(hub.connections, userId)
+	logger.Logger.LogInfo(fmt.Sprintf("removed user %s websocket connection from pool", userId))
 	hub.connLock.Unlock()
 }

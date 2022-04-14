@@ -11,11 +11,18 @@ type Repository interface {
 	// FetchRandomQRCode returns a string that can be embedded
 	// in a QR Code image
 	FetchRandomQRCode() (string, error)
-	FetchUserID() (string, error)
-	FetchAllTaskReports() (*[]model.TasksReport, error)
-	FetchTaskReportByUserID(userId string) (*model.TasksReport, error)
-	CreateTaskReport(report *model.TasksReport) error
-	FetchAllTasks() ([]string, error)
+	GenerateNewUserID() (string, error)
+
+	FetchAllAirdropSubmissions() (*[]model.AirdropSubmission, error)
+
+	// FetchAirdropSubmissionByUserID fetches the airdrop submission
+	// submitted by userId.
+	// Returns db.ErrNoSubmissionFound if no airdrop submission was found.
+	FetchAirdropSubmissionByUserID(userId string) (*model.AirdropSubmission, error)
+
+	// InsertAirdropSubmission inserts a airdrop submission document into the database.
+	// Note that InsertAirdropSubmission does not check submission.UserID is valid
+	InsertAirdropSubmission(submission *model.AirdropSubmission) error
 
 	// IsValidUser checks if id exists in repo.
 	// Returns db.ErrUserNotFound if not found, db error otherwise
@@ -24,22 +31,11 @@ type Repository interface {
 	// InsertMultipleDrugs assigns tracking code (i.e rfid text or alphanum
 	// code depending on validationOption) to each drug and inserts same
 	// into the repository
-	InsertMultipleDrugs(*[]model.Drug, model.ValidationOption) error
+	InsertMultipleDrugs(*[]model.DBDrug, model.ValidationOption) error
 
-	// InsertDrug assigns tracking code (i.e rfid text or alphanum
-	// code depending on validationOption) to drug and inserts same
-	// into the repository
-	InsertDrug(model.Drug, model.ValidationOption) error
-
-	// FetchDrugByBatchNumber fetches the drug bearing this batchNumber
-	// and manufactured by this manufacturer.
-	// Note that batch numbers are often used for internal tracking
-	// by drug manufacturers
-	FetchDrugByBatchNumber(batchNumber, manufacturer string) (*model.Drug, error)
-
-	// FetchWalletAddress fetches the wallet address forUserId.
-	// Returns db.ErrUserNotFound if user_id is not found in repo
-	FetchWalletAddress(forUserId string) (string, error)
+	// FetchUserInfo fetches the model.User.
+	// Returns db.ErrUserNotFound if uid is not found in repo
+	FetchUserInfo(uid string) (*model.User, error)
 
 	SubmitIncidenceReport(report *model.IncidenceReport) error
 }
@@ -50,7 +46,7 @@ type NotificationRepo interface {
 	// ReadNotification deletes notification identified by notificationId.
 	// If notificationId isn't found in repo, ReadNotification safely returns.
 	// Clients can persist notifications that has already been read by user.
-	ReadNotification(userId, notificationId string) error
+	ReadNotification(notificationId string) error
 
 	FetchAllUnreadNotifications(forUserId string) (*[]model.Notification, error)
 }

@@ -2,16 +2,26 @@ package model
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"strings"
 	"time"
 )
 
+// DBDrug represent a drug entry in the DB
+type DBDrug struct {
+	ValidationOption string `bson:"validationOption"`
+	ValidationData   string `bson:"data"`
+	Drug             Drug   `bson:"drug"`
+}
+
 type Drug struct {
-	Manufacturer   string    `json:"manufacturer"`
-	Name           string    `json:"drug_name"`
-	ManufacturedOn time.Time `json:"manufactured_on"`
-	Expiry         time.Time `json:"expiry"`
-	BatchNumber    string    `json:"batch_number"`
+	ID             primitive.ObjectID `json:"id" bson:"_id"`
+	Manufacturer   string             `json:"manufacturer" bson:"manufacturer" validate:"required"`
+	Name           string             `json:"name" bson:"name" validate:"required""`
+	ManufacturedOn time.Time          `json:"manufactured_on" bson:"manufactureDate" validate:"required""`
+	Expiry         time.Time          `json:"expiry" bson:"expiry" validate:"required"`
+	BatchNumber    string             `json:"batch_number" bson:"batchNumber"`
+	CreatedAt      time.Time          `json:"created_at" bson:"createdAt"`
 }
 
 const separator string = "-*-"
@@ -44,5 +54,51 @@ func DrugFromString(value string) *Drug {
 		ManufacturedOn: manufactured,
 		Expiry:         expiry,
 		BatchNumber:    parts[4],
+		CreatedAt:      time.Now(),
 	}
+}
+
+var SampleDrug1 = Drug{
+	Manufacturer:   "Heart Pharmaceutical",
+	Name:           "Chloramphenicol",
+	ManufacturedOn: time.Now(),
+	Expiry:         time.Now().Add(time.Hour * 72),
+	BatchNumber:    "1234BRQ",
+	CreatedAt:      time.Now(),
+}
+
+var SampleDrug2 = Drug{
+	Manufacturer:   "Heart Pharmaceutical",
+	Name:           "Paracetamol",
+	ManufacturedOn: time.Now(),
+	Expiry:         time.Now().Add(time.Hour * 72),
+	BatchNumber:    "0454BcQ",
+	CreatedAt:      time.Now(),
+}
+
+var SampleDrug3 = Drug{
+	Manufacturer:   "Heart Pharmaceutical",
+	Name:           "Coalescere",
+	ManufacturedOn: time.Now(),
+	Expiry:         time.Now().Add(time.Hour * 72),
+	BatchNumber:    "12qzKL6",
+	CreatedAt:      time.Now(),
+}
+
+var SampleDrug4 = Drug{
+	Manufacturer:   "Heart Pharmaceutical",
+	Name:           "Cacoonamide",
+	ManufacturedOn: time.Now(),
+	Expiry:         time.Now().Add(time.Hour * 72),
+	BatchNumber:    "SD198HJ",
+	CreatedAt:      time.Now(),
+}
+
+var SampleDrug5 = Drug{
+	Manufacturer:   "Heart Pharmaceutical",
+	Name:           "Thanosavengers",
+	ManufacturedOn: time.Now(),
+	Expiry:         time.Now().Add(time.Hour * 72),
+	BatchNumber:    "09ERWKV",
+	CreatedAt:      time.Now(),
 }

@@ -159,10 +159,10 @@ func formatReadError(err error) error {
 	}
 }
 
-// validateTaskReport checks that the POSTed task report
+// validateAirdropSubmission checks that the POSTed task report
 // contains the required field.
 // If one or more fields are missing, it reports an error
-func validateTaskReport(report *model.TasksReport) (errs map[string]string) {
+func validateAirdropSubmission(report *model.AirdropSubmission) (errs map[string]string) {
 	return nil
 }
 
@@ -185,7 +185,7 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 
 	// extract other form values
 	// todo use package go-playground/mold
-	report.Submitted = time.Now()
+	report.SubmittedOn = time.Now()
 	report.Description = r.PostFormValue("description")
 	report.PharmacyLocation = r.PostFormValue("pharmacy_location")
 	report.PharmacyName = r.PostFormValue("pharmacy_name")
