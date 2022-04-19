@@ -1,1 +1,1 @@
-DSN=
+DSN="mongodb://username:password@url"

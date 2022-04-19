@@ -485,6 +485,11 @@ func (m *Mongo) GenerateNewUserID() (string, error) {
 		m.GenerateNewUserID()
 	}
 
+	// insert new user
+	if _, err := m.db.Collection(users).InsertOne(ctx, bson.D{{"uid", userId}}); err != nil {
+		return "", errors.Wrap(err, "failed to insert new UID to db")
+	}
+
 	return userId, nil
 }
 
@@ -580,7 +585,7 @@ func (m *Mongo) SubmitIncidenceReport(report *model.IncidenceReport) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := m.db.Collection(airdropSubmissions).InsertOne(ctx, report)
+	_, err := m.db.Collection(incidenceReports).InsertOne(ctx, report)
 	if err != nil {
 		return errors.Wrap(err, "failed to insert incidence report into db")
 	}

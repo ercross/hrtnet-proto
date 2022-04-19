@@ -1,5 +1,5 @@
-# This file exist to provide control for the program deployment on Heroku
-# To run on a local file, make use of goals defined in the Makefile (can be found in project root directory)
+# Config file for deployment on Heroku
+# To run program on a local server, make use of goals defined in the Makefile (./Makefile)
 
 # Apps on Heroku must listen on the port specified by the PORT environment variable
 # $(echo PORT) is a linux command substitution used to collect the port for this program
