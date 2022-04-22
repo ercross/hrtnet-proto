@@ -113,7 +113,7 @@ func (app *app) updateWalletAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := app.repo.UpdateUserEmail(user.WalletAddr, user.UID); err != nil {
+	if err := app.repo.UpdateUserWalletAddress(user.WalletAddr, user.UID); err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
 	}
