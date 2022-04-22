@@ -32,6 +32,7 @@ const (
 	incidenceReports   string = "incidenceReports"
 	users              string = "users"
 	notifications      string = "notifications"
+	contactUs          string = "contactUs"
 )
 
 type Mongo struct {
@@ -75,18 +76,48 @@ func ConnectMongo(dsn string) (*Mongo, error) {
 	return mongo, nil
 }
 
-// runMigrations creates necessary collections in a transaction,
-// rollback and panics if any error is encountered.
-// Note that creating collections within transactions is not
-// available in Mongo 4.2 and earlier.
+// runMigrations creates necessary collections
 func (m *Mongo) runMigrations(ctx context.Context) {
-
+	m.createContactUsCollection()
 	m.createDrugsCollection()
 	m.createAirdropSubmissionCollection()
 	m.createUsersCollection()
 	m.createIncidenceReportCollection()
 	m.createNotificationsCollection()
 
+}
+
+func (m *Mongo) createContactUsCollection() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	jsonSchema := bson.M{
+		"bsonType": "object",
+		"required": []string{"message", "title", "email"},
+		"properties": bson.M{
+			"email": bson.M{
+				"bsonType": "string",
+			},
+			"message": bson.M{
+				"bsonType": "string",
+			},
+			"title": bson.M{
+				"bsonType": "string",
+			},
+		},
+	}
+
+	validator := bson.M{
+		"$jsonSchema": jsonSchema,
+	}
+	opts := options.CreateCollection().SetValidator(validator)
+
+	// Potential error ignored because CreateCollection can only return
+	// mongo.CommandError, which indicates that the collection is already existing
+	if err := m.db.CreateCollection(ctx, contactUs, opts); err != nil {
+		logger.Logger.LogError("failed to create incidence report collection",
+			"create incidence reports", err)
+	}
 }
 
 func (m *Mongo) createNotificationsCollection() {
@@ -220,7 +251,7 @@ func (m *Mongo) createUsersCollection() {
 			},
 			"email": bson.M{
 				"bsonType": "string",
-				"pattern":  "@mongodb\\.com$",
+				"pattern":  "/^(([^<>()[\\]\\\\.,;:\\s@\\\"]+(\\.[^<>()[\\]\\\\.,;:\\s@\\\"]+)*)|(\\\".+\\\"))@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\])|(([a-zA-Z\\-0-9]+\\.)+[a-zA-Z]{2,}))$/",
 			},
 		},
 	}
@@ -413,6 +444,43 @@ func (m *Mongo) InsertMultipleDrugs(values *[]model.DBDrug, option model.Validat
 		return errors.Wrap(err, "failed to insert multiple drugs")
 	}
 
+	return nil
+}
+
+func (m *Mongo) InsertContactUs(message *model.ContactUs) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := m.db.Collection(contactUs).InsertOne(ctx, message)
+	if err != nil {
+		return errors.Wrap(err, "failed to insert notification into db")
+	}
+	return nil
+}
+
+func (m *Mongo) UpdateUserWalletAddress(address, uid string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := options.Update().SetUpsert(false)
+	filter := bson.D{{"uid", uid}}
+	update := bson.D{{"$set", bson.D{{"walletAddr", address}}}}
+	if _, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts); err != nil {
+		return errors.Wrap(err, "failed to update user wallet address")
+	}
+	return nil
+}
+
+func (m *Mongo) UpdateUserEmail(email, uid string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := options.Update().SetUpsert(false)
+	filter := bson.D{{"uid", uid}}
+	update := bson.D{{"$set", bson.D{{"email", email}}}}
+	if _, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts); err != nil {
+		return errors.Wrap(err, "failed to update user email")
+	}
 	return nil
 }
 

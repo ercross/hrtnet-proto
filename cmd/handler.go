@@ -5,6 +5,7 @@ import (
 	"github.com/Hrtnet/social-activities/internal/db"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/skip2/go-qrcode"
@@ -13,10 +14,122 @@ import (
 	"time"
 )
 
-// serveAllTaskReports serves activities statistics
+// submitContactUsMessage
+// Method: POST
+// Parameters:
+//		email string *required
+//		title string *required
+//		message string *required
+func (app *app) submitContactUsMessage(w http.ResponseWriter, r *http.Request) {
+	var msg model.ContactUs
+	err := app.readJSON(w, r, &msg)
+	if err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(msg); err != nil {
+		errs := make(map[string]string)
+		for _, err := range err.(validator.ValidationErrors) {
+			errs[err.Field()] = err.Error()
+		}
+		app.sendFailedValidationResponse(w, r, errs)
+		return
+	}
+
+	if err := app.repo.InsertContactUs(&msg); err != nil {
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "message recorded",
+	}, r, nil)
+}
+
+// updateEmail
+// Method: POST
+// Parameters:
+// 		email string *required
+// 		user_id string *required
+func (app *app) updateEmail(w http.ResponseWriter, r *http.Request) {
+	type p struct {
+		Email string `json:"email" validate:"required,email"`
+		UID   string `json:"user_id" validate:"required"`
+	}
+	var user p
+	err := app.readJSON(w, r, &user)
+	if err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(user); err != nil {
+		errs := make(map[string]string)
+		for _, err := range err.(validator.ValidationErrors) {
+			errs[err.Field()] = err.Error()
+		}
+		app.sendFailedValidationResponse(w, r, errs)
+		return
+	}
+
+	if err := app.repo.UpdateUserEmail(user.Email, user.UID); err != nil {
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "update user successful",
+	}, r, nil)
+}
+
+func (app *app) updateWalletAddress(w http.ResponseWriter, r *http.Request) {
+	type p struct {
+		WalletAddr string `json:"wallet_addr" validate:"required"`
+		UID        string `json:"user_id" validate:"required"`
+	}
+	var user p
+	err := app.readJSON(w, r, &user)
+	if err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(user); err != nil {
+		errs := make(map[string]string)
+		for _, err := range err.(validator.ValidationErrors) {
+			errs[err.Field()] = err.Error()
+		}
+		app.sendFailedValidationResponse(w, r, errs)
+		return
+	}
+
+	if err := app.repo.UpdateUserEmail(user.WalletAddr, user.UID); err != nil {
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "update user successful",
+	}, r, nil)
+}
+
+// serveAllAirdropSubmission serves activities statistics
 // METHOD: GET
 // Request must contain admin authorization
-func (app *app) serveAllTaskReports(w http.ResponseWriter, r *http.Request) {
+func (app *app) serveAllAirdropSubmission(w http.ResponseWriter, r *http.Request) {
 	reports, err := app.repo.FetchAllAirdropSubmissions()
 	if err != nil {
 		app.sendServerErrorResponse(w, r, err)
@@ -32,12 +145,12 @@ func (app *app) serveAllTaskReports(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// serveTaskReport
+// serveAirdropSubmission
 // returns the task report submitted by user identified by
 // user_id in query parameter
 // METHOD: GET
 // Query parameter: user_id
-func (app *app) serveTaskReport(w http.ResponseWriter, r *http.Request) {
+func (app *app) serveAirdropSubmission(w http.ResponseWriter, r *http.Request) {
 	userId := r.URL.Query().Get("user_id")
 	report, err := app.repo.FetchAirdropSubmissionByUserID(userId)
 	if err != nil {

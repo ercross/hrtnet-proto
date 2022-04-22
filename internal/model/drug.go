@@ -9,9 +9,10 @@ import (
 
 // DBDrug represent a drug entry in the DB
 type DBDrug struct {
-	ValidationOption string `bson:"validationOption"`
-	ValidationData   string `bson:"data"`
-	Drug             Drug   `bson:"drug"`
+	ID               primitive.ObjectID `json:"id" bson:"_id"`
+	ValidationOption string             `bson:"validationOption"`
+	ValidationData   string             `bson:"data"`
+	Drug             Drug               `bson:"drug"`
 }
 
 type Drug struct {

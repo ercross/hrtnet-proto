@@ -24,6 +24,12 @@ type Repository interface {
 	// Note that InsertAirdropSubmission does not check submission.UserID is valid
 	InsertAirdropSubmission(submission *model.AirdropSubmission) error
 
+	InsertContactUs(message *model.ContactUs) error
+
+	UpdateUserEmail(email, uid string) error
+
+	UpdateUserWalletAddress(address, uid string) error
+
 	// IsValidUser checks if id exists in repo.
 	// Returns db.ErrUserNotFound if not found, db error otherwise
 	IsValidUser(id string) error
