@@ -1,6 +1,9 @@
 package model
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
+import (
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
+)
 
 type User struct {
 
@@ -8,7 +11,25 @@ type User struct {
 	ID primitive.ObjectID `json:"id" bson:"_id"`
 
 	// system assigned uid
-	UID           string `json:"uid" bson:"uid"`
-	WalletAddress string `json:"wallet_address" bson:"walletAddr"`
-	Email         string `json:"email" bson:"email"`
+	UID           string    `json:"user_id" bson:"uid" validate:"required"`
+	WalletAddress string    `json:"wallet_addr" bson:"walletAddr"`
+	Email         string    `json:"email" bson:"email"`
+	DateOfBirth   time.Time `json:"dob" bson:"dob"`
+}
+
+// ToMap with bson tag equivalent keys, excluding entry for UID.
+// and any other field that has nil/zero value at conversion time
+func (u *User) ToMap() map[string]interface{} {
+	m := make(map[string]interface{})
+	if u.WalletAddress != "" {
+		m["walletAddr"] = u.WalletAddress
+	}
+	if u.Email != "" {
+		m["email"] = u.Email
+	}
+	if !u.DateOfBirth.IsZero() {
+		m["dob"] = u.DateOfBirth
+	}
+
+	return m
 }

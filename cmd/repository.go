@@ -26,9 +26,12 @@ type Repository interface {
 
 	InsertContactUs(message *model.ContactUs) error
 
-	UpdateUserEmail(email, uid string) error
+	UpdateUser(user *model.User) error
 
-	UpdateUserWalletAddress(address, uid string) error
+	// FetchUser fetches user identified by uid.
+	// Returns db.ErrUserNotFound if user not found.
+	// Other errors can be treated as internal error
+	FetchUser(uid string) (*model.User, error)
 
 	// IsValidUser checks if id exists in repo.
 	// Returns db.ErrUserNotFound if not found, db error otherwise

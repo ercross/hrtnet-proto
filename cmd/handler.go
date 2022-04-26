@@ -5,6 +5,7 @@ import (
 	"github.com/Hrtnet/social-activities/internal/db"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"github.com/Hrtnet/social-activities/internal/model"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -51,34 +52,20 @@ func (app *app) submitContactUsMessage(w http.ResponseWriter, r *http.Request) {
 	}, r, nil)
 }
 
-// updateEmail
-// Method: POST
-// Parameters:
-// 		email string *required
-// 		user_id string *required
-func (app *app) updateEmail(w http.ResponseWriter, r *http.Request) {
-	type p struct {
-		Email string `json:"email" validate:"required,email"`
-		UID   string `json:"user_id" validate:"required"`
-	}
-	var user p
-	err := app.readJSON(w, r, &user)
+func (app *app) serveUserInfo(w http.ResponseWriter, r *http.Request) {
+	uid := chi.URLParam(r, "uid")
+
+	user, err := app.repo.FetchUser(uid)
 	if err != nil {
-		app.sendBadRequestResponse(w, r, err)
-		return
-	}
-
-	validate := validator.New()
-	if err := validate.Struct(user); err != nil {
-		errs := make(map[string]string)
-		for _, err := range err.(validator.ValidationErrors) {
-			errs[err.Field()] = err.Error()
+		if err == db.ErrUserNotFound {
+			app.sendAPIResponse(&responseWriterArgs{
+				writer:     w,
+				statusCode: 404,
+				status:     false,
+				message:    "User does not exist",
+			}, r, nil)
+			return
 		}
-		app.sendFailedValidationResponse(w, r, errs)
-		return
-	}
-
-	if err := app.repo.UpdateUserEmail(user.Email, user.UID); err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
 	}
@@ -87,33 +74,31 @@ func (app *app) updateEmail(w http.ResponseWriter, r *http.Request) {
 		writer:     w,
 		statusCode: 200,
 		status:     true,
-		message:    "update user successful",
-	}, r, nil)
+		message:    "user info",
+	}, r, user)
 }
 
-func (app *app) updateWalletAddress(w http.ResponseWriter, r *http.Request) {
-	type p struct {
-		WalletAddr string `json:"wallet_addr" validate:"required"`
-		UID        string `json:"user_id" validate:"required"`
-	}
-	var user p
+// updateUser
+// Method: POST
+// Request Body:
+//		wallet_addr string
+//		dob time.Time
+// 		email string
+// 		user_id string *required
+func (app *app) updateUser(w http.ResponseWriter, r *http.Request) {
+	var user model.User
 	err := app.readJSON(w, r, &user)
 	if err != nil {
 		app.sendBadRequestResponse(w, r, err)
 		return
 	}
 
-	validate := validator.New()
-	if err := validate.Struct(user); err != nil {
-		errs := make(map[string]string)
-		for _, err := range err.(validator.ValidationErrors) {
-			errs[err.Field()] = err.Error()
-		}
-		app.sendFailedValidationResponse(w, r, errs)
+	if user.UID == "" {
+		app.sendBadRequestResponse(w, r, errors.New("missing UID"))
 		return
 	}
 
-	if err := app.repo.UpdateUserWalletAddress(user.WalletAddr, user.UID); err != nil {
+	if err := app.repo.UpdateUser(&user); err != nil {
 		app.sendServerErrorResponse(w, r, err)
 		return
 	}
@@ -122,7 +107,7 @@ func (app *app) updateWalletAddress(w http.ResponseWriter, r *http.Request) {
 		writer:     w,
 		statusCode: 200,
 		status:     true,
-		message:    "update user successful",
+		message:    "User update successful",
 	}, r, nil)
 }
 

@@ -484,6 +484,56 @@ func (m *Mongo) UpdateUserEmail(email, uid string) error {
 	return nil
 }
 
+func (m *Mongo) UpdateUser(user *model.User) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := options.Update().SetUpsert(false)
+	filter := bson.D{{"uid", user.UID}}
+
+	d := new(bson.D)
+	for key, value := range user.ToMap() {
+		*d = append(*d, bson.E{key, value})
+	}
+
+	// todo : optimize
+	update := bson.D{{"$set", d}}
+	_, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts)
+	if err != nil {
+		return errors.Wrap(err, "failed to update user data")
+	}
+	return nil
+}
+
+func (m *Mongo) FetchUser(uid string) (*model.User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var user model.User
+	err := m.db.Collection(users).FindOne(ctx, bson.D{{"uid", uid}}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrUserNotFound
+		}
+		return nil, errors.Wrap(err, "failed to fetch user info")
+	}
+
+	return &user, nil
+}
+
+func (m *Mongo) UpdateUserDOB(dob time.Time, uid string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := options.Update().SetUpsert(false)
+	filter := bson.D{{"uid", uid}}
+	update := bson.D{{"$set", bson.D{{"dob", dob}}}}
+	if _, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts); err != nil {
+		return errors.Wrap(err, "failed to update user date of birth")
+	}
+	return nil
+}
+
 func (m *Mongo) FetchRandomQRCode() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

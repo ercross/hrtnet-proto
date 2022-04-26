@@ -35,14 +35,14 @@ func (app *app) routes() http.Handler {
 	mux.Get("/api/qr-code", app.serveQrCode)
 	mux.Get("/api/task-report", app.serveAirdropSubmission)
 	mux.Get("/api/wallet-address", app.serveWalletAddress)
+	mux.Get("/api/user/{uid}", app.serveUserInfo)
 	mux.Post("/api/incidence-report", app.submitIncidenceReport)
 	mux.Post("/api/task-report", app.submitAirdropForm)
 	mux.Post("/api/validate-qr", app.validateQrCode)
 	mux.Post("/api/validate-code", app.validateShortCode)
 	mux.Post("/api/validate-rfid", app.validateRFIDText)
 	mux.Post("/api/contact-us", app.submitContactUsMessage)
-	mux.Post("/api/update-email", app.updateEmail)
-	mux.Post("/api/update-wallet", app.updateWalletAddress)
+	mux.Post("/api/update-user", app.updateUser)
 
 	mux.Get("/api/notifications/{user_id}", app.notifications)
 
