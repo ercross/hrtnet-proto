@@ -1,17 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/Hrtnet/social-activities/internal/logger"
 	"net/http"
-)
-
-type errorType error
-
-var (
-	errInternal   errorType = errors.New("internal server error")
-	errBadRequest errorType = errors.New("bad request")
 )
 
 // sendErrorResponse() method is a generic helper for sending JSON-formatted error

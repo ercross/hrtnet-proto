@@ -401,13 +401,13 @@ func (app *app) submitIncidenceReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, errorType, errs := app.extractIncidenceReport(r, app.config)
-	if len(errs) != 0 {
-		if errorType == errInternal {
-			app.sendServerErrorResponse(w, r, errors.New(errs["error"]))
+	report, errorType, err := app.extractIncidenceReport(r, app.config)
+	if err != nil {
+		if errorType == db.InternalError {
+			app.sendServerErrorResponse(w, r, err)
 			return
 		}
-		app.sendFailedValidationResponse(w, r, errs)
+		app.sendFailedValidationResponse(w, r, map[string]string{"error": err.Error()})
 		return
 	}
 

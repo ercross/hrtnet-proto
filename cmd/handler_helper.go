@@ -171,34 +171,33 @@ func validateAirdropSubmission(report *model.AirdropSubmission) (errs map[string
 // Any error returned is a client error.
 // Receipt file name is saved as userId_unixTime.
 // Evidence images are saved in a userId_unixTime directory
-func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.IncidenceReport, errorType, map[string]string) {
-	var report model.IncidenceReport
-	errors := make(map[string]string)
+func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.IncidenceReport, db.ErrorType, error) {
+	report := new(model.IncidenceReport)
 
 	// check that user is valid
 	report.UserID = r.PostFormValue("user_id")
 	err := app.repo.IsValidUser(report.UserID)
 	if err != nil {
-		errors["error"] = err.Error()
-		return nil, errBadRequest, errors
+		if err == db.ErrUserNotFound {
+			return nil, db.ValidationError, err
+		}
+		return nil, db.InternalError, err
 	}
 
 	// extract other form values
-	// todo use package go-playground/mold
 	report.SubmittedOn = time.Now()
 	report.Description = r.PostFormValue("description")
 	report.PharmacyLocation = r.PostFormValue("pharmacy_location")
 	report.PharmacyName = r.PostFormValue("pharmacy_name")
 
-	// todo validate with go-playground/validator
-	// todo check that the expected files are not absent
+	if report.Description == "" || report.PharmacyName == "" || report.PharmacyLocation == "" {
+		return nil, db.ValidationError, errors.New("one of description, pharmacy location, or pharmacy name is missing")
+	}
 
 	// save receipt
 	file, header, err := r.FormFile("receipt")
 	if err != nil {
-		errors["receipt"] = "invalid file type"
-		errors["extra"] = err.Error()
-		return nil, errBadRequest, errors
+		return nil, db.ValidationError, errors.Wrap(err, "invalid receipt image")
 	}
 	defer file.Close()
 	filenameParts := strings.Split(header.Filename, ".")
@@ -206,8 +205,10 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 	saveAs := fmt.Sprintf("%s_%d.%s", report.UserID, time.Now().Unix(), fileExtension)
 	savedFileUrl, err := saveFile(file, saveAs, cfg.incidenceReportReceiptImagePath)
 	if err != nil {
-		errors["error"] = err.Error()
-		return nil, errInternal, errors
+		if err == errFileTooLarge {
+			return nil, db.ValidationError, errors.Wrap(err, "failed to save receipt image")
+		}
+		return nil, db.InternalError, err
 	}
 	report.ReceiptImageUrl = savedFileUrl
 
@@ -215,20 +216,17 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 	zippedFiles, header, err := r.FormFile("evidence_images")
 	if err != nil {
 		os.Remove(report.ReceiptImageUrl)
-		errors["evidence_images"] = "parse error"
-		errors["error"] = err.Error()
-		return nil, errBadRequest, errors
+		return nil, db.ValidationError, errors.Wrap(err, "invalid evidence images")
 	}
 
 	saveDir := fmt.Sprintf("%s/%s_%d", cfg.incidenceReportDrugImagePath, report.UserID, time.Now().Unix())
 	savePaths, errType, err := unzipAndSave(zippedFiles, header, saveDir)
 	if err != nil {
-		errors["error"] = err.Error()
-		return nil, errType, errors
+		return nil, errType, err
 	}
 	// todo obtain correct save path
 	report.EvidenceImagesUrl = *savePaths
-	return &report, nil, nil
+	return report, db.None, nil
 }
 
 func (app *app) processValidation(w http.ResponseWriter, r *http.Request, drug *model.Drug, userId string, err error) {

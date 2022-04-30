@@ -17,6 +17,7 @@ type ErrorType int
 const (
 	InternalError ErrorType = iota
 	ValidationError
+	None
 )
 
 var (

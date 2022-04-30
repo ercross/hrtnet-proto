@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"github.com/Hrtnet/social-activities/internal/db"
 	"github.com/pkg/errors"
 	"io"
 	"mime/multipart"
@@ -14,7 +15,7 @@ import (
 
 // unzipAndSave
 // Returns save directory.
-func unzipAndSave(source multipart.File, header *multipart.FileHeader, destination string) (*[]string, errorType, error) {
+func unzipAndSave(source multipart.File, header *multipart.FileHeader, destination string) (*[]string, db.ErrorType, error) {
 
 	// save file in temp dir
 	// Custom dir name to avoid directory name collision if
@@ -22,29 +23,29 @@ func unzipAndSave(source multipart.File, header *multipart.FileHeader, destinati
 	tempSavePath := fmt.Sprintf("*./temp-%s", header.Filename)
 	err := os.MkdirAll(tempSavePath, 0700)
 	if err != nil {
-		return nil, errInternal, errors.Wrap(err, "error creating temp save path")
+		return nil, db.InternalError, errors.Wrap(err, "error creating temp save path")
 	}
 	defer os.RemoveAll(tempSavePath) // clean up tempSavePath
 
 	url, err := saveFile(source, header.Filename, tempSavePath)
 	if err == errFileTooLarge {
-		return nil, errBadRequest, err
+		return nil, db.ValidationError, err
 	}
 	if err != nil {
-		return nil, errInternal, errors.Wrap(err, "error: temporarily saving zipped file failed")
+		return nil, db.InternalError, errors.Wrap(err, "error: temporarily saving zipped file failed")
 	}
 
 	// open source zipped file
 	reader, err := zip.OpenReader(url)
 	if err != nil {
-		return nil, errBadRequest, errors.Wrap(err, "invalid zipped file")
+		return nil, db.ValidationError, errors.Wrap(err, "invalid zipped file")
 	}
 	defer reader.Close()
 
 	// convert destination to absolute path
 	destination, err = filepath.Abs(destination)
 	if err != nil {
-		return nil, errInternal, errors.Wrap(err, "error obtaining destination's absolute path: unzipAndSave")
+		return nil, db.InternalError, errors.Wrap(err, "error obtaining destination's absolute path: unzipAndSave")
 	}
 
 	// unpack each file inside zipped file to destination
@@ -52,12 +53,12 @@ func unzipAndSave(source multipart.File, header *multipart.FileHeader, destinati
 	for _, f := range reader.File {
 		savedPath, err := unpackFile(f, destination)
 		if err != nil {
-			return nil, errBadRequest, errors.Wrap(err, "unable to unpack file: invalid zip file")
+			return nil, db.ValidationError, errors.Wrap(err, "unable to unpack file: invalid zip file")
 		}
 		savePaths = append(savePaths, savedPath)
 	}
 
-	return &savePaths, nil, nil
+	return &savePaths, db.None, nil
 }
 
 // unpackFile unpacks a single zip file into destination

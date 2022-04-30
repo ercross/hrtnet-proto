@@ -6,7 +6,7 @@ import (
 )
 
 type IncidenceReport struct {
-	ID                primitive.ObjectID `json:"id" bson:"_id"`
+	ID                primitive.ObjectID `json:"id" bson:"id"`
 	UserID            string             `json:"user_id" bson:"uid" validate:"required"`
 	PharmacyName      string             `json:"pharmacy_name" bson:"pharmacyName" validate:"required"`
 	Description       string             `json:"description" bson:"description" validate:"required"`
