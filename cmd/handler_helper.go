@@ -171,7 +171,7 @@ func extractAnnouncement(r *http.Request, saveDir, apiUrl string) (*model.Announ
 
 	// extract other form values
 	announcement.CreatedOn = time.Now()
-	announcement.Text = r.PostFormValue("alt_text")
+	announcement.Text = r.PostFormValue("text")
 	announcement.Title = r.PostFormValue("title")
 	validTill, err := time.Parse("01-02-2006", r.PostFormValue("valid_till"))
 	if err != nil {
