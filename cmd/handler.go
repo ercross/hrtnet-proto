@@ -10,10 +10,185 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/skip2/go-qrcode"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// submitAnnouncement
+// METHOD: POST
+// Content-type: multipart/form-data
+// Request Body:
+// 		valid_till date required (pattern must conform to MM-DD-YYYY)
+//		text string required (not more than 150 characters)
+//		title string required (not more than 30 characters)
+//		url string
+//		image multipartfile (Content-Type file/image, file must not be greater than 5mb)
+func (app *app) submitAnnouncement(w http.ResponseWriter, r *http.Request) {
+
+	// todo protect endpoint with admin key
+
+	// Max memory::6 MB
+	if err := r.ParseMultipartForm(6 << 20); err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	announcement, errorType, err := extractAnnouncement(r, app.config.announcementImagePath, app.config.apiUrl)
+	if err != nil {
+		if errorType == db.InternalError {
+			app.sendServerErrorResponse(w, r, err)
+			return
+		}
+		app.sendFailedValidationResponse(w, r, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// validate fields
+	validate := validator.New()
+	if err := validate.Struct(announcement); err != nil {
+		errs := make(map[string]string)
+		for _, err := range err.(validator.ValidationErrors) {
+			errs[err.Field()] = fmt.Sprintf("%v is not a valid value for %s", err.Value(), err.Field())
+			app.sendFailedValidationResponse(w, r, errs)
+			return
+		}
+	}
+
+	if err := app.repo.InsertAnnouncement(announcement); err != nil {
+		app.sendServerErrorResponse(w, r, errors.Wrap(err, "error inserting announcement"))
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "Announcement has been saved and push notifications has been sent",
+	}, r, nil)
+
+	// trigger push notification
+	model.PushNotification{
+		Title:    announcement.Title,
+		Body:     announcement.Text,
+		ImageUrl: announcement.ImageUrl,
+	}.SendToMultipleUsers(model.Heartnet)
+}
+
+func (app *app) serveAnnouncements(w http.ResponseWriter, r *http.Request) {
+	announcements, err := app.repo.FetchAnnouncements()
+	if err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "valid announcements",
+	}, r, announcements)
+}
+
+// submitIncidenceReportStatus
+// Method: POST
+// Request Body:
+// 		parent_id mongodb valid id required
+//		message string required
+//		sent_by string required
+func (app *app) submitIncidenceReportStatus(w http.ResponseWriter, r *http.Request) {
+	// todo protect endpoint with partner key
+
+	update := new(model.IncidenceReportUpdate)
+
+	err := app.readJSON(w, r, &update)
+	if err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(update); err != nil {
+		errs := make(map[string]string)
+		for _, err := range err.(validator.ValidationErrors) {
+			errs[err.Field()] = fmt.Sprintf("%v is not a valid value for %s", err.Value(), err.Field())
+			app.sendFailedValidationResponse(w, r, errs)
+			return
+		}
+	}
+
+	// todo optimize. use https://www.mongodb.com/docs/manual/reference/operator/aggregation/lookup/#definition
+	uid, err := app.repo.FetchIncidenceReporterUID(update.IncidenceReportID)
+	if err != nil {
+		if err != mongo.ErrNoDocuments {
+			app.sendEditConflictResponse(w, r, "incidence report not found")
+			return
+		}
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+
+	token, err := app.repo.FetchNotificationTokenByUserID(uid)
+	if err != nil {
+		if err != mongo.ErrNoDocuments {
+			app.sendAPIResponse(&responseWriterArgs{
+				writer:     w,
+				statusCode: 200,
+				status:     true,
+				message:    "Thanks for submitting this incidence report status update",
+			}, r, nil)
+			return
+		}
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+
+	model.PushNotification{
+		Title: "Incidence report update",
+		Body:  update.Message,
+	}.SendToUser(token)
+
+	err = app.repo.InsertIncidenceReportUpdate(update)
+	if err != nil {
+		app.sendServerErrorResponse(w, r, err)
+		return
+	}
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "Thanks for submitting this incidence report status update",
+	}, r, nil)
+}
+
+// sendRewardsAlert mocks sending rewards alert to user
+// Method: POST
+// Request Body:
+// 		token string
+func (app *app) sendRewardsAlert(w http.ResponseWriter, r *http.Request) {
+	type t struct {
+		Value string `json:"token"`
+	}
+	var token t
+	err := app.readJSON(w, r, &token)
+	if err != nil {
+		app.sendBadRequestResponse(w, r, err)
+		return
+	}
+
+	app.sendAPIResponse(&responseWriterArgs{
+		writer:     w,
+		statusCode: 200,
+		status:     true,
+		message:    "Rewards Alert Sent",
+	}, r, nil)
+
+	model.PushNotification{
+		Title: "Congratulations",
+		Body:  "You have just received 22 HRT token",
+	}.SendToUser(token.Value)
+}
 
 // submitContactUsMessage
 // Method: POST

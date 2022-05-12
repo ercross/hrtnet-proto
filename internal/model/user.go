@@ -11,10 +11,11 @@ type User struct {
 	ID primitive.ObjectID `json:"id" bson:"_id"`
 
 	// system assigned uid
-	UID           string    `json:"user_id" bson:"uid" validate:"required"`
-	WalletAddress string    `json:"wallet_addr" bson:"walletAddr"`
-	Email         string    `json:"email" bson:"email"`
-	DateOfBirth   time.Time `json:"dob" bson:"dob"`
+	UID                   string    `json:"user_id" bson:"uid" validate:"required"`
+	WalletAddress         string    `json:"wallet_addr" bson:"walletAddr"`
+	Email                 string    `json:"email" bson:"email"`
+	DateOfBirth           time.Time `json:"dob" bson:"dob"`
+	PushNotificationToken string    `json:"push_notification_token" bson:"pushNotificationToken"`
 }
 
 // ToMap with bson tag equivalent keys, excluding entry for UID.
@@ -30,6 +31,8 @@ func (u *User) ToMap() map[string]interface{} {
 	if !u.DateOfBirth.IsZero() {
 		m["dob"] = u.DateOfBirth
 	}
-
+	if u.PushNotificationToken != "" {
+		m["pushNotificationToken"] = u.PushNotificationToken
+	}
 	return m
 }

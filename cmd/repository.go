@@ -1,6 +1,9 @@
 package main
 
-import "github.com/Hrtnet/social-activities/internal/model"
+import (
+	"github.com/Hrtnet/social-activities/internal/model"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 type Repository interface {
 	Validator
@@ -42,11 +45,22 @@ type Repository interface {
 	// into the repository
 	InsertMultipleDrugs(*[]model.DBDrug, model.ValidationOption) error
 
+	InsertAnnouncement(announcement *model.Announcement) error
+	FetchAnnouncements() (*[]model.Announcement, error)
+
+	// InsertIncidenceReportUpdate should only be called by
+	// partners with HeartNet
+	InsertIncidenceReportUpdate(update *model.IncidenceReportUpdate) error
+
+	RecordReward(reward model.Reward) error
+
 	// FetchUserInfo fetches the model.User.
 	// Returns db.ErrUserNotFound if uid is not found in repo
 	FetchUserInfo(uid string) (*model.User, error)
 
 	SubmitIncidenceReport(report *model.IncidenceReport) error
+	FetchIncidenceReporterUID(id primitive.ObjectID) (string, error)
+	FetchNotificationTokenByUserID(uid string) (string, error)
 }
 
 type NotificationRepo interface {

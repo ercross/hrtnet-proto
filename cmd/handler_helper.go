@@ -166,9 +166,51 @@ func validateAirdropSubmission(report *model.AirdropSubmission) (errs map[string
 	return nil
 }
 
+func extractAnnouncement(r *http.Request, saveDir, apiUrl string) (*model.Announcement, db.ErrorType, error) {
+	announcement := new(model.Announcement)
+
+	// extract other form values
+	announcement.CreatedOn = time.Now()
+	announcement.Text = r.PostFormValue("alt_text")
+	announcement.Title = r.PostFormValue("title")
+	validTill, err := time.Parse("01-02-2006", r.PostFormValue("valid_till"))
+	if err != nil {
+		return nil, db.ValidationError, errors.Wrap(err, "invalid validity date")
+	}
+	announcement.ValidTill = validTill
+	announcement.Url = r.PostFormValue("url")
+
+	// save image if found
+	file, header, err := r.FormFile("image")
+
+	if err != nil {
+
+		if err == http.ErrMissingFile {
+			return announcement, db.None, nil
+		}
+		return nil, db.ValidationError, errors.Wrap(err, "invalid announcement image")
+	}
+	defer file.Close()
+
+	parts := strings.Split(header.Filename, ".")
+	fileExtension := parts[len(parts)-1]
+	saveAs := fmt.Sprintf("%d_%s.%s", announcement.CreatedOn.Unix(),
+		strings.ReplaceAll(announcement.Title, " ", "_"), fileExtension)
+
+	savedFileUrl, err := saveFile(file, saveAs, saveDir)
+	if err != nil {
+		if err == errFileTooLarge {
+			return nil, db.ValidationError, errors.Wrap(err, "failed to save receipt image")
+		}
+		return nil, db.InternalError, err
+	}
+	announcement.ImageUrl = fmt.Sprintf("%s%s", apiUrl, savedFileUrl)
+
+	return announcement, db.None, nil
+}
+
 // extractIncidenceReport extracts incidence report data from the request.
 // Request content-type must be multipart/form-data.
-// Any error returned is a client error.
 // Receipt file name is saved as userId_unixTime.
 // Evidence images are saved in a userId_unixTime directory
 func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.IncidenceReport, db.ErrorType, error) {
@@ -210,7 +252,7 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 		}
 		return nil, db.InternalError, err
 	}
-	report.ReceiptImageUrl = savedFileUrl
+	report.ReceiptImageUrl = fmt.Sprintf("%s%s", app.config.apiUrl, savedFileUrl)
 
 	// save evidence images
 	zippedFiles, header, err := r.FormFile("evidence_images")
@@ -220,7 +262,7 @@ func (app *app) extractIncidenceReport(r *http.Request, cfg *config) (*model.Inc
 	}
 
 	saveDir := fmt.Sprintf("%s/%s_%d", cfg.incidenceReportDrugImagePath, report.UserID, time.Now().Unix())
-	savePaths, errType, err := unzipAndSave(zippedFiles, header, saveDir)
+	savePaths, errType, err := unzipAndSave(zippedFiles, header, saveDir, app.config.apiUrl)
 	if err != nil {
 		return nil, errType, err
 	}

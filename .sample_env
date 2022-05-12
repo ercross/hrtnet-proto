@@ -1,1 +1,2 @@
-DSN="mongodb://username:password@url"
+DSN="mongodb://username:password@url?options"
+GOOGLE_APPLICATION_CREDENTIALS="path/to/firebase/admin/sdk/keystore/json/file"

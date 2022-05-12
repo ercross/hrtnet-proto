@@ -15,7 +15,7 @@ import (
 
 // unzipAndSave
 // Returns save directory.
-func unzipAndSave(source multipart.File, header *multipart.FileHeader, destination string) (*[]string, db.ErrorType, error) {
+func unzipAndSave(source multipart.File, header *multipart.FileHeader, destination, apiUrl string) (*[]string, db.ErrorType, error) {
 
 	// save file in temp dir
 	// Custom dir name to avoid directory name collision if
@@ -49,12 +49,17 @@ func unzipAndSave(source multipart.File, header *multipart.FileHeader, destinati
 	}
 
 	// unpack each file inside zipped file to destination
+	wd, _ := os.Getwd()
 	var savePaths []string
 	for _, f := range reader.File {
 		savedPath, err := unpackFile(f, destination)
 		if err != nil {
 			return nil, db.ValidationError, errors.Wrap(err, "unable to unpack file: invalid zip file")
 		}
+
+		// treat save path
+		savedPath = strings.TrimPrefix(savedPath, wd)
+		savedPath = fmt.Sprintf("%s%s", apiUrl, savedPath)
 		savePaths = append(savePaths, savedPath)
 	}
 
@@ -124,6 +129,7 @@ func saveFile(file multipart.File, saveAs, savePath string) (fileUrl string, err
 	}
 
 	fileUrl = savePath + "/" + saveAs
+
 	out, err := os.Create(fileUrl)
 	defer out.Close()
 	if err != nil {
@@ -135,5 +141,6 @@ func saveFile(file multipart.File, saveAs, savePath string) (fileUrl string, err
 	if err != nil {
 		return "", errors.Wrap(err, "error saving file")
 	}
+	fileUrl = strings.TrimPrefix(fileUrl, ".")
 	return fileUrl, nil
 }

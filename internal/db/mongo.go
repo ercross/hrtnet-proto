@@ -7,6 +7,7 @@ import (
 	"github.com/jakoubek/onetimecode"
 	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
@@ -28,12 +29,14 @@ var (
 
 // collection names
 const (
-	drugs              string = "drugs"
-	airdropSubmissions string = "airdropSubmissions"
-	incidenceReports   string = "incidenceReports"
-	users              string = "users"
-	notifications      string = "notifications"
-	contactUs          string = "contactUs"
+	drugs              = "drugs"
+	airdropSubmissions = "airdropSubmissions"
+	incidenceReports   = "incidenceReports"
+	users              = "users"
+	notifications      = "notifications"
+	contactUs          = "contactUs"
+	announcements      = "announcements"
+	rewards            = "rewards"
 )
 
 type Mongo struct {
@@ -85,7 +88,43 @@ func (m *Mongo) runMigrations(ctx context.Context) {
 	m.createUsersCollection()
 	m.createIncidenceReportCollection()
 	m.createNotificationsCollection()
+	m.createAnnouncementsCollection()
+	m.createRewardsCollection()
+}
 
+func (m *Mongo) createAnnouncementsCollection() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	jsonSchema := bson.M{
+		"bsonType": "object",
+		"required": []string{"validTill"},
+		"properties": bson.M{
+			"validTill": bson.M{
+				"bsonType": "date",
+			},
+		},
+	}
+
+	validator := bson.M{
+		"$jsonSchema": jsonSchema,
+	}
+	opts := options.CreateCollection().SetValidator(validator)
+
+	if err := m.db.CreateCollection(ctx, announcements, opts); err != nil {
+		logger.Logger.LogError("failed to create announcements collection",
+			"create announcements collection", err)
+	}
+}
+
+func (m *Mongo) createRewardsCollection() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	if err := m.db.CreateCollection(ctx, rewards); err != nil {
+		logger.Logger.LogError("failed to create rewards collection",
+			"create rewards collection", err)
+	}
 }
 
 func (m *Mongo) createContactUsCollection() {
@@ -454,33 +493,7 @@ func (m *Mongo) InsertContactUs(message *model.ContactUs) error {
 
 	_, err := m.db.Collection(contactUs).InsertOne(ctx, message)
 	if err != nil {
-		return errors.Wrap(err, "failed to insert notification into db")
-	}
-	return nil
-}
-
-func (m *Mongo) UpdateUserWalletAddress(address, uid string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	opts := options.Update().SetUpsert(false)
-	filter := bson.D{{"uid", uid}}
-	update := bson.D{{"$set", bson.D{{"walletAddr", address}}}}
-	if _, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts); err != nil {
-		return errors.Wrap(err, "failed to update user wallet address")
-	}
-	return nil
-}
-
-func (m *Mongo) UpdateUserEmail(email, uid string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	opts := options.Update().SetUpsert(false)
-	filter := bson.D{{"uid", uid}}
-	update := bson.D{{"$set", bson.D{{"email", email}}}}
-	if _, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts); err != nil {
-		return errors.Wrap(err, "failed to update user email")
+		return errors.Wrap(err, "failed to insert contact us into db")
 	}
 	return nil
 }
@@ -497,7 +510,6 @@ func (m *Mongo) UpdateUser(user *model.User) error {
 		*d = append(*d, bson.E{key, value})
 	}
 
-	// todo : optimize
 	update := bson.D{{"$set", d}}
 	_, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts)
 	if err != nil {
@@ -520,19 +532,6 @@ func (m *Mongo) FetchUser(uid string) (*model.User, error) {
 	}
 
 	return &user, nil
-}
-
-func (m *Mongo) UpdateUserDOB(dob time.Time, uid string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	opts := options.Update().SetUpsert(false)
-	filter := bson.D{{"uid", uid}}
-	update := bson.D{{"$set", bson.D{{"dob", dob}}}}
-	if _, err := m.db.Collection(users).UpdateOne(ctx, filter, update, opts); err != nil {
-		return errors.Wrap(err, "failed to update user date of birth")
-	}
-	return nil
 }
 
 func (m *Mongo) FetchRandomQRCode() (string, error) {
@@ -709,4 +708,94 @@ func (m *Mongo) SubmitIncidenceReport(report *model.IncidenceReport) error {
 		return errors.Wrap(err, "failed to insert incidence report into db")
 	}
 	return nil
+}
+
+func (m *Mongo) FetchNotificationTokenByUserID(uid string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var user model.User
+	err := m.db.Collection(users).FindOne(ctx,
+		bson.D{{"uid", uid}}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return "", ErrUserNotFound
+		}
+		return "", errors.Wrap(err, "failed to fetch user info")
+	}
+
+	return user.PushNotificationToken, nil
+}
+
+func (m *Mongo) InsertAnnouncement(announcement *model.Announcement) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := m.db.Collection(announcements).InsertOne(ctx, announcement)
+	if err != nil {
+		return errors.Wrap(err, "failed to insert announcement into db")
+	}
+	return nil
+}
+
+func (m *Mongo) FetchAnnouncements() (*[]model.Announcement, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// todo filter by validity
+	curs, err := m.db.Collection(announcements).Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+
+	announcements := make([]model.Announcement, 0)
+
+	if err := curs.All(ctx, &announcements); err != nil {
+		return nil, errors.Wrap(err, "failed to decode find result into slice on fetch announcements")
+	}
+
+	return &announcements, err
+}
+
+// InsertIncidenceReportUpdate should only be called by
+// partners with HeartNet
+func (m *Mongo) InsertIncidenceReportUpdate(reportUpdate *model.IncidenceReportUpdate) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := options.Update().SetUpsert(false)
+	filter := bson.D{{"_id", reportUpdate.IncidenceReportID}}
+	update := bson.D{{"$push", bson.D{{"updates", reportUpdate}}}}
+	_, err := m.db.Collection(incidenceReports).UpdateOne(ctx, filter, update, opts)
+	if err != nil {
+		return errors.Wrap(err, "failed to insert incidence report update")
+	}
+	return nil
+}
+
+func (m *Mongo) RecordReward(reward model.Reward) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := m.db.Collection(rewards).InsertOne(ctx, reward)
+	if err != nil {
+		return errors.Wrap(err, "failed to record reward")
+	}
+	return nil
+}
+
+func (m *Mongo) FetchIncidenceReporterUID(id primitive.ObjectID) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var report model.IncidenceReport
+	err := m.db.Collection(incidenceReports).FindOne(ctx, bson.D{{"_id", id}}).Decode(&report)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return "", err
+		}
+		return "", errors.Wrap(err, "failed to fetch incidence reporter uid")
+	}
+
+	return report.UserID, nil
 }

@@ -10,7 +10,7 @@ build_api:
 	@echo "prototype api backend built"
 
 run_api:
-	./${BINARY_DIR}/${API_BINARY_NAME} -environment ${PREF_ENV} -port ${API_PORT} -apiUrl ${DOMAIN}:${API_PORT}/
+	./${BINARY_DIR}/${API_BINARY_NAME} -environment ${PREF_ENV} -port ${API_PORT} -apiUrl ${DOMAIN}:${API_PORT}
 
 test_db_package:
 	 go test -v ./internal/db

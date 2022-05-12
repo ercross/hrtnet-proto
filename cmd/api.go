@@ -18,6 +18,7 @@ type config struct {
 	environment                     model.Environment
 	incidenceReportDrugImagePath    string
 	incidenceReportReceiptImagePath string
+	announcementImagePath           string
 	apiUrl                          string
 	dsn                             string
 }
@@ -40,7 +41,11 @@ func main() {
 
 	cfg := initConfig()
 	logger.Logger = logger.NewLogger(cfg.environment == model.Production)
-	createDirs()
+	createDirs(
+		cfg.announcementImagePath,
+		cfg.incidenceReportReceiptImagePath,
+		cfg.incidenceReportDrugImagePath)
+	model.InitializeFirebaseAdminSDK()
 	mongo, err := db.ConnectMongo(cfg.dsn)
 	if err != nil {
 		logger.Logger.LogFatal("error connecting to database", "", err)
@@ -85,6 +90,7 @@ func initConfig() config {
 	config.dsn = os.Getenv("DSN")
 	config.incidenceReportDrugImagePath = "./res/images/incidence-reports/drugs"
 	config.incidenceReportReceiptImagePath = "./res/images/incidence-reports/receipts"
+	config.announcementImagePath = "./res/images/announcements"
 
 	return config
 }
