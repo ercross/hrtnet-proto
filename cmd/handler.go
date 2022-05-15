@@ -1,6 +1,7 @@
 package main
 
 import (
+	"firebase.google.com/go/messaging"
 	"fmt"
 	"github.com/Hrtnet/social-activities/internal/db"
 	"github.com/Hrtnet/social-activities/internal/logger"
@@ -70,9 +71,14 @@ func (app *app) submitAnnouncement(w http.ResponseWriter, r *http.Request) {
 
 	// trigger push notification
 	model.PushNotification{
-		Title:    announcement.Title,
-		Body:     announcement.Text,
-		ImageUrl: announcement.ImageUrl,
+		Notification: messaging.Notification{
+			Title:    announcement.Title,
+			Body:     announcement.Body,
+			ImageURL: announcement.ImageUrl,
+		},
+		Data: map[string]string{
+			"url": announcement.Url,
+		},
 	}.SendToMultipleUsers(model.Heartnet)
 }
 
@@ -145,8 +151,10 @@ func (app *app) submitIncidenceReportStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	model.PushNotification{
-		Title: "Incidence report update",
-		Body:  update.Message,
+		Notification: messaging.Notification{
+			Title: "Incidence report update",
+			Body:  update.Message,
+		},
 	}.SendToUser(token)
 
 	err = app.repo.InsertIncidenceReportUpdate(update)
@@ -165,10 +173,12 @@ func (app *app) submitIncidenceReportStatus(w http.ResponseWriter, r *http.Reque
 // sendRewardsAlert mocks sending rewards alert to user
 // Method: POST
 // Request Body:
-// 		token string
+// 		token string required
+//		url string optional
 func (app *app) sendRewardsAlert(w http.ResponseWriter, r *http.Request) {
 	type t struct {
 		Value string `json:"token"`
+		Url   string `json:"url"`
 	}
 	var token t
 	err := app.readJSON(w, r, &token)
@@ -185,8 +195,13 @@ func (app *app) sendRewardsAlert(w http.ResponseWriter, r *http.Request) {
 	}, r, nil)
 
 	model.PushNotification{
-		Title: "Congratulations",
-		Body:  "You have just received 22 HRT token",
+		Notification: messaging.Notification{
+			Title: "Congratulations",
+			Body:  "You have just received 22 HRT token",
+		},
+		Data: map[string]string{
+			"url": token.Url,
+		},
 	}.SendToUser(token.Value)
 }
 

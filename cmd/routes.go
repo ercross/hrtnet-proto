@@ -31,8 +31,8 @@ func (app *app) routes() http.Handler {
 	mux.Use(middleware.Timeout(30 * time.Second))
 	mux.Use(cors.Handler(corsOptions))
 
+	mux.Get("/api/res/images/*", app.serveImages)
 	mux.Get("/api/health", app.checkStatus)
-	mux.Get("/res/images/*", app.serveImages)
 	mux.Get("/api/activities-statistics", app.serveAllAirdropSubmission)
 	mux.Get("/api/new-user", app.serveStarterPack)
 	mux.Get("/api/qr-code", app.serveQrCode)

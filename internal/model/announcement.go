@@ -18,11 +18,14 @@ type Announcement struct {
 	// the announcement
 	ImageUrl string `json:"image_url" bson:"imageUrl" validate:"required"`
 
-	// Text to be used as push notification body, not more than 150 character
-	Text string `json:"text" bson:"text" validate:"max=150"`
+	// Body to be used as push notification body, not more than 150 character
+	Body string `json:"text" bson:"text" validate:"max=150"`
 
-	// Link to any internet resources
-	Url       string    `json:"url" bson:"url" validate:"url"`
+	// Url to any internet resources
+	Url string `json:"url" bson:"url" validate:"url"`
+
+	// ValidTill specifies the time over which this announcement will be displayed
+	// to mobile app users
 	ValidTill time.Time `json:"valid_till" bson:"validTill" validate:"required"`
 	CreatedOn time.Time `json:"created_on" bson:"createdOn"`
 }

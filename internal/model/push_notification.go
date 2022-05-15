@@ -29,9 +29,12 @@ type Topic string
 var Heartnet Topic = "heartnet"
 
 type PushNotification struct {
-	Title    string `json:"title"`
-	Body     string `json:"body"`
-	ImageUrl string `json:"image"`
+	messaging.Notification
+
+	// Data holds any extra data.
+	// One important data field is url,
+	// which can be used to pass an app deep link or web link.
+	Data map[string]string
 }
 
 // SendToUser sends message to user attached to token
@@ -51,10 +54,11 @@ func (p PushNotification) SendToUser(token string) {
 
 	// messaging.AndroidConfig.TTL not set here so we can take advantage of the default.
 	message := &messaging.Message{
+		Data: p.Data,
 		Notification: &messaging.Notification{
 			Title:    p.Title,
 			Body:     p.Body,
-			ImageURL: p.ImageUrl,
+			ImageURL: p.ImageURL,
 		},
 		Token: token,
 	}
@@ -86,10 +90,11 @@ func (p PushNotification) SendToMultipleUsers(topic Topic) {
 
 	ttl := time.Hour * 24
 	message := &messaging.Message{
+		Data: p.Data,
 		Notification: &messaging.Notification{
 			Title:    p.Title,
 			Body:     p.Body,
-			ImageURL: p.ImageUrl,
+			ImageURL: p.ImageURL,
 		},
 		Android: &messaging.AndroidConfig{
 			TTL: &ttl,
@@ -103,5 +108,4 @@ func (p PushNotification) SendToMultipleUsers(topic Topic) {
 			"failed to send push notification to multiple users", "send to multiple users", err)
 		return
 	}
-
 }
